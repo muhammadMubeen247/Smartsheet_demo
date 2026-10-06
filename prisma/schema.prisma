@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int         @id @default(autoincrement())
+  name         String
+  email        String      @unique
+  password     String
+  workspaces   Workspace[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@map("users")
+}
+
+model Workspace {
+  id        Int      @id @default(autoincrement())
+  name      String
+  ownerId   Int
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  sheets    Sheet[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("workspaces")
+}
+
+model Sheet {
+  id          Int       @id @default(autoincrement())
+  name        String
+  workspaceId Int
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  columns     Column[]
+  rows        Row[]
+  forms       Form[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("sheets")
+}
+
+model Column {
+  id        Int        @id @default(autoincrement())
+  sheetId   Int
+  sheet     Sheet      @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  name      String
+  type      ColumnType @default(TEXT)
+  position  Int
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([sheetId, position])
+  @@unique([sheetId, name])
+  @@map("columns")
+}
+
+enum ColumnType {
+  TEXT
+  NUMBER
+  BOOLEAN
+  DATE
+}
+
+model Row {
+  id        Int      @id @default(autoincrement())
+  sheetId   Int
+  sheet     Sheet    @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  values    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("rows")
+}
+
+model Form {
+  id          Int      @id @default(autoincrement())
+  sheetId     Int
+  sheet       Sheet    @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  fields      Json
+  publicSlug  String   @unique
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("forms")
+}

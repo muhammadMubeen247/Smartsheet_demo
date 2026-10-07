@@ -2,9 +2,11 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuthStore } from './stores/auth.store';
 import { ProtectedRoute } from './components/protected-route';
+import { AppLayout } from './components/layout/AppLayout';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
+import { Workspaces } from './pages/Workspaces';
 
 function App() {
   const { initAuth, isLoading } = useAuthStore();
@@ -27,15 +29,18 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route
-          path="/dashboard"
+          path="/"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <AppLayout />
             </ProtectedRoute>
           }
-        />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        >
+          <Route index element={<Navigate to="/home" replace />} />
+          <Route path="home" element={<Dashboard />} />
+          <Route path="workspaces" element={<Workspaces />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </BrowserRouter>
   );

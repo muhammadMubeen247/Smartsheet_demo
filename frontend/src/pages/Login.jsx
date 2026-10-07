@@ -9,7 +9,7 @@ export function Login() {
   const [error, setError] = useState('');
 
   const handleSuccess = () => {
-    navigate('/dashboard');
+    setTimeout(() => navigate('/home'), 100);
   };
 
   const handleError = (errorMessage) => {

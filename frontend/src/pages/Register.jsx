@@ -12,7 +12,7 @@ export function Register() {
   const handleSuccess = () => {
     setSuccess(true);
     setTimeout(() => {
-      navigate('/dashboard');
+      navigate('/home');
     }, 1500);
   };
 

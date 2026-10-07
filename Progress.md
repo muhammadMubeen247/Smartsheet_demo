@@ -249,6 +249,58 @@
 
 ---
 
+## Sprint 3: Homepage Layout & Navigation
+
+### Phase 1: Layout Components
+- Created `src/components/layout/Sidebar.jsx`:
+  - Fixed-width sidebar (20% of viewport)
+  - App title "Spreadsheet Demo" at top
+  - Navigation buttons: Home (with home icon) and Workspaces (with briefcase icon)
+  - Active state highlighting for current route
+  - Uses `variant="ghost"` buttons for subtle styling
+- Created `src/components/layout/Header.jsx`:
+  - Horizontal header bar spanning right 80% of page
+  - Bell icon for notifications
+  - User profile dropdown menu with:
+    - User name and email display
+    - Logout option
+  - Dropdown state managed with useState
+- Created `src/components/layout/AppLayout.jsx`:
+  - Flexbox layout wrapper combining Sidebar + Header + main content
+  - Uses React Router's `<Outlet />` to render child routes
+  - Proper spacing: `ml-[20%]` for sidebar offset, `pt-16` for header
+
+### Phase 2: Route Structure Update
+- Updated `src/App.jsx`:
+  - Wrapped protected routes with `<AppLayout>`
+  - Changed route structure to nested layout:
+    - `/` → redirects to `/home`
+    - `/home` → Dashboard component
+    - `/workspaces` → Workspaces component (placeholder)
+  - Imported and wired AppLayout component
+- Simplified `src/pages/Dashboard.jsx`:
+  - Removed logout button (now in header)
+  - Changed welcome message to "Hi {username}! Nice to meet you"
+  - Focused on single greeting display
+- Created `src/pages/Workspaces.jsx`:
+  - Placeholder page with title "Workspaces"
+  - "Coming soon" message for future implementation
+
+### Sprint 3 Summary
+
+| Module | Status |
+|--------|--------|
+| Sidebar component | ✅ Done |
+| Header component | ✅ Done |
+| AppLayout wrapper | ✅ Done |
+| Nested route structure | ✅ Done |
+| Homepage (Dashboard) | ✅ Done |
+| Workspaces placeholder | ✅ Done |
+| Navigation with active states | ✅ Done |
+| User profile dropdown | ✅ Done |
+
+---
+
 ## Documentation
 - `README.md` — full API documentation with endpoints, auth instructions, project structure, testing guide
 - `Progress.md` — this file, development progress log organized by sprints

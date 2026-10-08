@@ -7,6 +7,7 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
 import { Workspaces } from './pages/Workspaces';
+import { SheetView } from './pages/SheetView';
 
 function App() {
   const { initAuth, isInitializing } = useAuthStore();
@@ -41,6 +42,14 @@ function App() {
           <Route path="workspaces" element={<Workspaces />} />
           <Route path="workspaces/:workspaceId" element={<Workspaces />} />
         </Route>
+        <Route
+          path="/workspaces/:workspaceId/sheets/:sheetId"
+          element={
+            <ProtectedRoute>
+              <SheetView />
+            </ProtectedRoute>
+          }
+        />
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </BrowserRouter>

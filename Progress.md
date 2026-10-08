@@ -301,6 +301,108 @@
 
 ---
 
+## Sprint 4: Spreadsheet View
+
+### Phase 1: Route & Component Structure
+- Added new route `/workspaces/:workspaceId/sheets/:sheetId` to `src/App.jsx`
+- Route configured as standalone (outside AppLayout) for full-width spreadsheet experience
+- Imported and wired SheetView component with ProtectedRoute wrapper
+
+### Phase 2: SheetView Page Component
+- Created `src/pages/SheetView.jsx`:
+  - Main container for spreadsheet view
+  - Fetches sheet data by ID (columns, rows) via API
+  - Manages sheet state (name, columns, rows)
+  - Provides context for child components
+  - Loading and error state handling
+  - Passes sheet data to Spreadsheet component
+
+### Phase 3: Spreadsheet Grid Component
+- Created `src/components/spreadsheet/Spreadsheet.jsx`:
+  - Full-width grid layout with row numbers and column headers
+  - Renders cells based on column types (TEXT, NUMBER, BOOLEAN, DATE)
+  - Single-cell editing mode (click to edit, blur/Enter to save)
+  - Cell validation based on column type
+  - API integration for cell updates (PUT /sheets/:sheetId/rows/:rowId)
+  - Add row functionality (POST /sheets/:sheetId/rows)
+  - Delete row functionality (DELETE /sheets/:sheetId/rows/:rowId)
+  - Horizontal and vertical scrolling
+  - Row selection highlighting
+
+### Phase 4: SheetHeader Component
+- Created `src/components/spreadsheet/SheetHeader.jsx`:
+  - Displays sheet name with inline editing
+  - Save button for name changes (PATCH /sheets/:sheetId)
+  - Cancel button to revert changes
+  - Breadcrumb navigation back to workspace
+  - Sheet metadata display (last updated)
+
+### Phase 5: Toolbar Component
+- Created `src/components/spreadsheet/Toolbar.jsx`:
+  - Visual placeholder toolbar matching reference design
+  - Buttons for: Insert Column, Insert Row, Delete Row, Format, Sort, Filter
+  - All buttons are visual-only (non-functional) as per constraints
+  - Tooltip hints on hover
+  - Responsive layout with icon buttons
+
+### Phase 6: AddColumnDialog Component
+- Created `src/components/spreadsheet/AddColumnDialog.jsx`:
+  - Modal dialog for creating new columns
+  - Form fields: column name, column type (dropdown)
+  - Type options: TEXT, NUMBER, BOOLEAN, DATE
+  - API integration (POST /sheets/:sheetId/columns)
+  - Form validation (required fields)
+  - Loading state during submission
+  - Error handling and display
+  - Auto-close on success
+
+### Phase 7: Sidebar Collapse Behavior
+- Updated `src/components/layout/Sidebar.jsx`:
+  - Added `collapsed` prop (default: false)
+  - Collapsed width: 72px (vs 240px expanded)
+  - Icons-only mode when collapsed (labels hidden)
+  - Brand name hidden in collapsed state
+  - User info hidden in collapsed state
+  - Smooth width transition (200ms)
+  - Centered icon alignment in collapsed mode
+
+### Phase 8: Navigation Integration
+- Updated `src/pages/Workspaces.jsx`:
+  - Made sheet items clickable in tree view (sidebar)
+  - Navigation to sheet view on click
+  - Made sheet table rows clickable
+  - Added hover states and cursor pointer
+  - Maintains existing workspace navigation
+
+### Phase 9: Build Verification
+- Ran `npm run build` successfully
+- No compilation errors
+- All components properly imported and exported
+- Route configuration validated
+
+### Sprint 4 Summary
+
+| Module | Status |
+|--------|--------|
+| SheetView page component | ✅ Done |
+| Spreadsheet grid with cell editing | ✅ Done |
+| SheetHeader with inline editing | ✅ Done |
+| Toolbar (visual placeholder) | ✅ Done |
+| AddColumnDialog component | ✅ Done |
+| Sidebar collapse behavior | ✅ Done |
+| Navigation from Workspaces to sheets | ✅ Done |
+| API integration (columns, rows) | ✅ Done |
+| Type validation on cell edit | ✅ Done |
+| Build verification | ✅ Done |
+
+### Key Decisions
+- SheetView is a standalone route (not nested under AppLayout) to enable full-width layout and avoid complex layout nesting
+- Toolbar buttons are visual-only placeholders matching the reference design, with no mocked functionality
+- Single-cell editing model: click to edit, blur/Enter to save via API
+- Sidebar collapses to 72px width with icons-only when viewing spreadsheets
+
+---
+
 ## Documentation
 - `README.md` — full API documentation with endpoints, auth instructions, project structure, testing guide
 - `Progress.md` — this file, development progress log organized by sprints

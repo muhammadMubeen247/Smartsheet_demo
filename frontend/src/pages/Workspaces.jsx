@@ -342,10 +342,14 @@ export function Workspaces() {
                         ) : details?.sheets?.length ? (
                           details.sheets.map((sheet) => (
                             <li key={sheet.id}>
-                              <div className="flex h-8 items-center gap-2 rounded-md px-2 text-xs text-zinc-600">
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/workspaces/${workspace.id}/sheets/${sheet.id}`)}
+                                className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-xs text-zinc-600 transition hover:bg-zinc-200/60 hover:text-zinc-900"
+                              >
                                 <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                                <span className="truncate">{sheet.name}</span>
-                              </div>
+                                <span className="truncate text-left">{sheet.name}</span>
+                              </button>
                             </li>
                           ))
                         ) : (
@@ -467,7 +471,11 @@ export function Workspaces() {
                       </thead>
                       <tbody className="divide-y divide-zinc-100">
                         {selectedWorkspace.sheets.map((sheet) => (
-                          <tr key={sheet.id} className="transition hover:bg-zinc-50">
+                          <tr
+                            key={sheet.id}
+                            onClick={() => navigate(`/workspaces/${selectedWorkspace.id}/sheets/${sheet.id}`)}
+                            className="cursor-pointer transition hover:bg-zinc-50"
+                          >
                             <td className="px-4 py-3">
                               <div className="flex min-w-0 items-center gap-3">
                                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">

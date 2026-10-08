@@ -39,6 +39,7 @@ function App() {
           <Route index element={<Navigate to="/home" replace />} />
           <Route path="home" element={<Dashboard />} />
           <Route path="workspaces" element={<Workspaces />} />
+          <Route path="workspaces/:workspaceId" element={<Workspaces />} />
         </Route>
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>

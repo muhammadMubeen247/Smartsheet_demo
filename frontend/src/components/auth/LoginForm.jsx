@@ -28,12 +28,13 @@ export function LoginForm({ onSuccess, onError }) {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
       <div>
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email" className="mb-2 block text-[13px] font-semibold text-zinc-800">Email</Label>
         <Input
           id="email"
           type="email"
+          placeholder="you@example.com"
           {...register('email')}
           disabled={isLoading}
           autoFocus
@@ -44,10 +45,11 @@ export function LoginForm({ onSuccess, onError }) {
       </div>
 
       <div>
-        <Label htmlFor="password">Password</Label>
+        <Label htmlFor="password" className="mb-2 block text-[13px] font-semibold text-zinc-800">Password</Label>
         <Input
           id="password"
           type="password"
+          placeholder="Enter your password"
           {...register('password')}
           disabled={isLoading}
         />
@@ -56,7 +58,7 @@ export function LoginForm({ onSuccess, onError }) {
         )}
       </div>
 
-      <Button type="submit" className="w-full" disabled={isLoading}>
+      <Button type="submit" className="h-11 w-full rounded-lg bg-primary text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90" disabled={isLoading}>
         {isLoading ? 'Signing in...' : 'Sign In'}
       </Button>
     </form>

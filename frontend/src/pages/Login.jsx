@@ -9,7 +9,7 @@ export function Login() {
   const [error, setError] = useState('');
 
   const handleSuccess = () => {
-    setTimeout(() => navigate('/home'), 100);
+    navigate('/home', { replace: true });
   };
 
   const handleError = (errorMessage) => {
@@ -28,9 +28,9 @@ export function Login() {
       
       <LoginForm onSuccess={handleSuccess} onError={handleError} />
       
-      <p className="mt-4 text-center text-sm text-gray-600">
+      <p className="mt-7 text-center text-sm text-zinc-600">
         Don't have an account?{' '}
-        <Link to="/register" className="text-blue-600 hover:text-blue-700 font-medium">
+        <Link to="/register" className="font-semibold text-red-600 transition hover:text-red-700">
           Sign up
         </Link>
       </p>

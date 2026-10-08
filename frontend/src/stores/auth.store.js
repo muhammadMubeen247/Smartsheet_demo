@@ -5,23 +5,24 @@ export const useAuthStore = create((set) => ({
   user: null,
   token: localStorage.getItem('token'),
   isLoading: false,
+  isInitializing: true,
   isAuthenticated: false,
 
   // Initialize auth state on app load
   initAuth: async () => {
     const token = localStorage.getItem('token');
     if (!token) {
-      set({ isAuthenticated: false, user: null });
+      set({ isAuthenticated: false, user: null, isInitializing: false });
       return;
     }
 
     try {
-      set({ isLoading: true });
+      set({ isInitializing: true });
       const { data } = await api.get('/auth/me');
-      set({ user: data.data, isAuthenticated: true, isLoading: false });
+      set({ user: data.data, isAuthenticated: true, isInitializing: false });
     } catch (error) {
       localStorage.removeItem('token');
-      set({ user: null, token: null, isAuthenticated: false, isLoading: false });
+      set({ user: null, token: null, isAuthenticated: false, isInitializing: false });
     }
   },
 

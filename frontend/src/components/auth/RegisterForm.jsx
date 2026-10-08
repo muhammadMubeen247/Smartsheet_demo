@@ -28,12 +28,13 @@ export function RegisterForm({ onSuccess, onError }) {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
       <div>
-        <Label htmlFor="name">Name</Label>
+        <Label htmlFor="name" className="mb-2 block text-[13px] font-semibold text-zinc-800">Name</Label>
         <Input
           id="name"
           type="text"
+          placeholder="Your name"
           {...register('name')}
           disabled={isLoading}
           autoFocus
@@ -44,10 +45,11 @@ export function RegisterForm({ onSuccess, onError }) {
       </div>
 
       <div>
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email" className="mb-2 block text-[13px] font-semibold text-zinc-800">Email</Label>
         <Input
           id="email"
           type="email"
+          placeholder="you@example.com"
           {...register('email')}
           disabled={isLoading}
         />
@@ -57,10 +59,11 @@ export function RegisterForm({ onSuccess, onError }) {
       </div>
 
       <div>
-        <Label htmlFor="password">Password</Label>
+        <Label htmlFor="password" className="mb-2 block text-[13px] font-semibold text-zinc-800">Password</Label>
         <Input
           id="password"
           type="password"
+          placeholder="Create a password"
           {...register('password')}
           disabled={isLoading}
         />
@@ -69,7 +72,7 @@ export function RegisterForm({ onSuccess, onError }) {
         )}
       </div>
 
-      <Button type="submit" className="w-full" disabled={isLoading}>
+      <Button type="submit" className="h-11 w-full rounded-lg bg-primary text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90" disabled={isLoading}>
         {isLoading ? 'Creating account...' : 'Create Account'}
       </Button>
     </form>

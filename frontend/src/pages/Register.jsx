@@ -12,7 +12,7 @@ export function Register() {
   const handleSuccess = () => {
     setSuccess(true);
     setTimeout(() => {
-      navigate('/home');
+      navigate('/home', { replace: true });
     }, 1500);
   };
 
@@ -39,9 +39,9 @@ export function Register() {
       
       <RegisterForm onSuccess={handleSuccess} onError={handleError} />
       
-      <p className="mt-4 text-center text-sm text-gray-600">
+      <p className="mt-7 text-center text-sm text-zinc-600">
         Already have an account?{' '}
-        <Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium">
+        <Link to="/login" className="font-semibold text-red-600 transition hover:text-red-700">
           Sign in
         </Link>
       </p>

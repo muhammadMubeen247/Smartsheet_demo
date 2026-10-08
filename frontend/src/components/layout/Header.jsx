@@ -1,13 +1,29 @@
 import { useState } from 'react';
-import { Bell, User, LogOut } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Bell, LogOut } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/auth.store';
 import { Button } from '../ui/button';
+
+function getInitials(name) {
+  return (name || 'U')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
+}
 
 export function Header() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const isWorkspaces = location.pathname.startsWith('/workspaces');
+  const title = isWorkspaces ? 'Workspaces' : 'Home';
+  const description = isWorkspaces
+    ? 'Organize your work in one place'
+    : 'A clear view of your work and activity';
 
   const handleLogout = () => {
     logout();
@@ -15,36 +31,46 @@ export function Header() {
   };
 
   return (
-    <header className="h-16 fixed top-0 right-0 bg-white border-b border-gray-200 flex items-center justify-end px-6" style={{ left: '20%' }}>
-      <div className="flex items-center gap-4">
-        <button className="relative p-2 hover:bg-gray-100 rounded-full">
-          <Bell className="h-5 w-5 text-gray-600" />
+    <header className="app-header fixed right-0 top-0 z-20 flex h-[74px] items-center justify-between border-b border-zinc-200 bg-white px-5 sm:px-7 lg:px-8">
+      <div className="min-w-0">
+        <h1 className="truncate text-xl font-semibold tracking-tight text-zinc-900">{title}</h1>
+        <p className="mt-0.5 hidden text-xs text-zinc-500 sm:block">{description}</p>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          aria-label="Notifications"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800"
+        >
+          <Bell className="h-[18px] w-[18px]" />
         </button>
 
         <div className="relative">
           <Button
             variant="ghost"
+            aria-label="Open account menu"
+            aria-expanded={showProfileMenu}
             onClick={() => setShowProfileMenu(!showProfileMenu)}
-            className="flex items-center gap-2"
+            className="h-auto rounded-full p-0 hover:bg-transparent"
           >
-            <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-              <User className="h-5 w-5 text-gray-600" />
-            </div>
-            <span className="text-sm font-medium text-gray-700">{user?.name}</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-xs font-semibold text-white">
+              {getInitials(user?.name)}
+            </span>
           </Button>
 
           {showProfileMenu && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
-              <div className="px-4 py-2 border-b border-gray-200">
-                <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                <p className="text-xs text-gray-500">{user?.email}</p>
+            <div className="absolute right-0 mt-3 w-60 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-xl shadow-zinc-900/10">
+              <div className="border-b border-zinc-100 px-4 py-3">
+                <p className="truncate text-sm font-medium text-zinc-900">{user?.name}</p>
+                <p className="truncate text-xs text-zinc-500">{user?.email}</p>
               </div>
               <button
                 onClick={handleLogout}
-                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-zinc-700 transition hover:bg-zinc-50"
               >
-                <LogOut className="h-4 w-4" />
-                Logout
+                <LogOut className="h-4 w-4 text-zinc-500" />
+                Sign out
               </button>
             </div>
           )}

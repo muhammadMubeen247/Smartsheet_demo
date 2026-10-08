@@ -51,16 +51,16 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
   const handleResizeStart = (columnId, e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     const th = e.currentTarget.closest('th');
     const startWidth = th.offsetWidth;
-    
+
     resizeRef.current = {
       columnId,
       startX: e.clientX,
       startWidth,
     };
-    
+
     document.addEventListener('mousemove', handleResizeMove);
     document.addEventListener('mouseup', handleResizeEnd);
     document.body.style.cursor = 'col-resize';
@@ -71,7 +71,7 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
     const { columnId, startX, startWidth } = resizeRef.current;
     const diff = e.clientX - startX;
     const newWidth = Math.max(120, startWidth + diff);
-    
+
     setColumnWidths((prev) => {
       const next = new Map(prev);
       next.set(String(columnId), newWidth);
@@ -374,7 +374,12 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
         onClick={() => { setSelectedCell({ rowId: row.id, columnId: column.id }); gridRef.current?.focus(); }}
         onDoubleClick={() => startEdit(row.id, column.id)}
       >
-        <div className={`flex h-full items-center px-3 ${column.type === 'NUMBER' ? 'justify-end tabular-nums' : ''}`}>
+        {/* When selected, reserve room on the right (pr-9) so the expand button never covers the value */}
+        <div
+          className={`flex h-full items-center pl-3 ${isSelected ? 'pr-9' : 'pr-3'} ${
+            column.type === 'NUMBER' ? 'justify-end tabular-nums' : ''
+          }`}
+        >
           {content}
         </div>
         {isSelected && selectedOverlay}
@@ -446,7 +451,7 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
                   <th
                     key={col.id}
                     style={{ width, minWidth: 120 }}
-                    className={`group relative sticky top-0 h-[68px] border-b border-r border-zinc-200/80 bg-white px-3 text-left align-middle ${
+                    className={`group sticky top-0 h-[68px] border-b border-r border-zinc-200/80 bg-white px-3 text-left align-middle ${
                       i === 0 ? 'left-[84px] z-30' : 'z-20'
                     }`}
                   >

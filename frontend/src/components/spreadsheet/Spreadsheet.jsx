@@ -16,6 +16,8 @@ function typeMeta(type) {
   return TYPE_META[type] || { icon: Type, label: type ? type.charAt(0) + type.slice(1).toLowerCase() : 'Text' };
 }
 
+const DEFAULT_COL_WIDTH = 180;
+
 export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initialRows = [], user, onRename }) {
   const [columns, setColumns] = useState(initialColumns);
   const [rows, setRows] = useState(initialRows);
@@ -27,10 +29,12 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
   const [newRowValues, setNewRowValues] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cellErrors, setCellErrors] = useState({});
+  const [columnWidths, setColumnWidths] = useState(() => new Map());
 
   const inputRef = useRef(null);
   const gridRef = useRef(null);
   const doneRef = useRef(false); // prevents Enter/Escape + blur from double-committing
+  const resizeRef = useRef({ columnId: null, startX: 0, startWidth: 0 });
 
   const colTypes = useRef(new Map(columns.map((c) => [String(c.id), c.type])));
   const colNames = useRef(new Map(columns.map((c) => [String(c.id), c.name])));
@@ -43,6 +47,54 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
   useEffect(() => {
     if (editingCell) inputRef.current?.focus();
   }, [editingCell]);
+
+  const handleResizeStart = (columnId, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const th = e.currentTarget.closest('th');
+    const startWidth = th.offsetWidth;
+    
+    resizeRef.current = {
+      columnId,
+      startX: e.clientX,
+      startWidth,
+    };
+    
+    document.addEventListener('mousemove', handleResizeMove);
+    document.addEventListener('mouseup', handleResizeEnd);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  const handleResizeMove = (e) => {
+    const { columnId, startX, startWidth } = resizeRef.current;
+    const diff = e.clientX - startX;
+    const newWidth = Math.max(120, startWidth + diff);
+    
+    setColumnWidths((prev) => {
+      const next = new Map(prev);
+      next.set(String(columnId), newWidth);
+      return next;
+    });
+  };
+
+  const handleResizeEnd = () => {
+    resizeRef.current = { columnId: null, startX: 0, startWidth: 0 };
+    document.removeEventListener('mousemove', handleResizeMove);
+    document.removeEventListener('mouseup', handleResizeEnd);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  };
+
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleResizeMove);
+      document.removeEventListener('mouseup', handleResizeEnd);
+    };
+  }, []);
+
+  const getColWidth = (colId) => columnWidths.get(String(colId)) ?? DEFAULT_COL_WIDTH;
 
   const flashError = (key, msg, ms = 3000) => {
     setCellErrors((prev) => ({ ...prev, [key]: msg }));
@@ -252,10 +304,11 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
     const isPrimary = colIdx === 0;
 
     const tdClasses = [
-      'relative h-9 min-w-[180px] border-b border-r border-zinc-200/80 p-0 text-sm text-zinc-800',
+      'relative h-9 min-w-[120px] border-b border-r border-zinc-200/80 p-0 text-sm text-zinc-800',
       errMsg ? 'bg-red-50' : 'bg-white group-hover:bg-zinc-50',
       isPrimary ? 'sticky left-[84px] z-10' : '',
     ].join(' ');
+    const cellStyle = { width: getColWidth(column.id) };
 
     const selectedOverlay = (
       <>
@@ -279,7 +332,7 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
 
     if (isEditing) {
       return (
-        <td key={key} className={tdClasses} title={errMsg || undefined}>
+        <td key={key} className={tdClasses} style={cellStyle} title={errMsg || undefined}>
           <input
             ref={inputRef}
             value={editValue}
@@ -316,6 +369,7 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
       <td
         key={key}
         className={tdClasses}
+        style={cellStyle}
         title={errMsg || undefined}
         onClick={() => { setSelectedCell({ rowId: row.id, columnId: column.id }); gridRef.current?.focus(); }}
         onDoubleClick={() => startEdit(row.id, column.id)}
@@ -387,10 +441,12 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
 
               {columns.map((col, i) => {
                 const { icon: TypeIcon, label } = typeMeta(col.type);
+                const width = getColWidth(col.id);
                 return (
                   <th
                     key={col.id}
-                    className={`group sticky top-0 h-[68px] min-w-[180px] border-b border-r border-zinc-200/80 bg-white px-3 text-left align-middle ${
+                    style={{ width, minWidth: 120 }}
+                    className={`group relative sticky top-0 h-[68px] border-b border-r border-zinc-200/80 bg-white px-3 text-left align-middle ${
                       i === 0 ? 'left-[84px] z-30' : 'z-20'
                     }`}
                   >
@@ -410,6 +466,11 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
+                    <div
+                      onMouseDown={(e) => handleResizeStart(col.id, e)}
+                      className="absolute inset-y-0 right-0 z-30 w-1 cursor-col-resize hover:bg-red-500 active:bg-red-500"
+                      aria-label={`Resize ${col.name} column`}
+                    />
                   </th>
                 );
               })}
@@ -478,6 +539,7 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
               {columns.map((col, ci) => (
                 <td
                   key={`new-${col.id}`}
+                  style={{ width: getColWidth(col.id), minWidth: 120 }}
                   className={`h-9 border-b border-r border-zinc-200/80 bg-white p-0 focus-within:bg-white ${ci === 0 ? 'sticky left-[84px] z-10' : ''} ${cellErrors.new ? 'bg-red-50' : ''}`}
                 >
                   <input

@@ -1,25 +1,36 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Plus, Trash2, LoaderCircle, AlertCircle, X } from 'lucide-react';
+import { Plus, Trash2, LoaderCircle, AlertCircle, X, Type, Hash, ToggleLeft, CalendarDays, Maximize2 } from 'lucide-react';
 import api from '../../lib/api';
 import { AddColumnDialog } from './AddColumnDialog';
 
-function getInitials(name) {
-  return (name || 'U').trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
+const GUTTER = 84; // px, width of the row-number gutter (keep in sync with the left-[84px] classes below)
+
+const TYPE_META = {
+  TEXT: { icon: Type, label: 'Text' },
+  NUMBER: { icon: Hash, label: 'Number' },
+  BOOLEAN: { icon: ToggleLeft, label: 'Checkbox' },
+  DATE: { icon: CalendarDays, label: 'Date' },
+};
+
+function typeMeta(type) {
+  return TYPE_META[type] || { icon: Type, label: type ? type.charAt(0) + type.slice(1).toLowerCase() : 'Text' };
 }
 
 export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initialRows = [], user, onRename }) {
   const [columns, setColumns] = useState(initialColumns);
   const [rows, setRows] = useState(initialRows);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedCell, setSelectedCell] = useState(null); // { rowId, columnId }
   const [editingCell, setEditingCell] = useState(null); // { rowId, columnId }
   const [editValue, setEditValue] = useState('');
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
-  const [isAddingRow, setIsAddingRow] = useState(false);
   const [newRowValues, setNewRowValues] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cellErrors, setCellErrors] = useState({});
+
   const inputRef = useRef(null);
+  const gridRef = useRef(null);
+  const doneRef = useRef(false); // prevents Enter/Escape + blur from double-committing
 
   const colTypes = useRef(new Map(columns.map((c) => [String(c.id), c.type])));
   const colNames = useRef(new Map(columns.map((c) => [String(c.id), c.name])));
@@ -29,6 +40,17 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
     colNames.current = new Map(columns.map((c) => [String(c.id), c.name]));
   }, [columns]);
 
+  useEffect(() => {
+    if (editingCell) inputRef.current?.focus();
+  }, [editingCell]);
+
+  const flashError = (key, msg, ms = 3000) => {
+    setCellErrors((prev) => ({ ...prev, [key]: msg }));
+    setTimeout(() => setCellErrors((prev) => { const n = { ...prev }; delete n[key]; return n; }), ms);
+  };
+
+  /* ───────────── API actions ───────────── */
+
   const addRow = useCallback(async (values) => {
     setIsSubmitting(true);
     setError('');
@@ -36,12 +58,10 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
       const { data } = await api.post(`/sheets/${sheetId}/rows`, { values });
       setRows((prev) => [...prev, data.data]);
       setNewRowValues({});
-      setIsAddingRow(false);
     } catch (err) {
       const msg = err.response?.data?.error?.message || 'Failed to add row';
       setError(msg);
-      setCellErrors((prev) => ({ ...prev, new: msg }));
-      setTimeout(() => setCellErrors((prev) => { const n = { ...prev }; delete n.new; return n; }), 5000);
+      flashError('new', msg, 5000);
     } finally {
       setIsSubmitting(false);
     }
@@ -56,9 +76,7 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
     } catch (err) {
       const msg = err.response?.data?.error?.message || 'Failed to update row';
       setError(msg);
-      const key = `row-${rowId}`;
-      setCellErrors((prev) => ({ ...prev, [key]: msg }));
-      setTimeout(() => setCellErrors((prev) => { const n = { ...prev }; delete n[key]; return n; }), 5000);
+      flashError(`row-${rowId}`, msg, 5000);
     } finally {
       setIsSubmitting(false);
     }
@@ -68,6 +86,7 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
     try {
       await api.delete(`/sheets/${sheetId}/rows/${rowId}`);
       setRows((prev) => prev.filter((r) => r.id !== rowId));
+      setSelectedCell((s) => (s?.rowId === rowId ? null : s));
     } catch {
       setError('Failed to delete row');
     }
@@ -92,33 +111,37 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
     try {
       await api.delete(`/sheets/${sheetId}/columns/${columnId}`);
       setColumns((prev) => prev.filter((c) => c.id !== columnId));
+      setSelectedCell((s) => (s?.columnId === columnId ? null : s));
     } catch {
       setError('Failed to delete column');
     }
   }, [sheetId]);
 
-  const startEdit = (rowId, columnId) => {
+  /* ───────────── Editing ───────────── */
+
+  const startEdit = (rowId, columnId, seed) => {
     const row = rows.find((r) => r.id === rowId);
     const currentVal = row?.values?.[String(columnId)];
+    doneRef.current = false;
+    setSelectedCell({ rowId, columnId });
     setEditingCell({ rowId, columnId });
-    setEditValue(currentVal != null ? String(currentVal) : '');
-    setTimeout(() => inputRef.current?.focus(), 10);
+    setEditValue(seed !== undefined ? seed : currentVal != null ? String(currentVal) : '');
   };
 
   const commitEdit = async () => {
-    if (!editingCell) return;
+    if (!editingCell || doneRef.current) return;
     const { rowId, columnId } = editingCell;
     const row = rows.find((r) => r.id === rowId);
     if (!row) { setEditingCell(null); return; }
 
     const type = colTypes.current.get(String(columnId));
+    const errKey = `${rowId}-${columnId}`;
     let parsedValue = editValue;
 
     if (type === 'NUMBER') {
       const num = parseFloat(editValue);
       if (editValue.trim() !== '' && isNaN(num)) {
-        setCellErrors((prev) => ({ ...prev, [`${rowId}-${columnId}`]: 'Invalid number' }));
-        setTimeout(() => setCellErrors((prev) => { const n = { ...prev }; delete n[`${rowId}-${columnId}`]; return n; }), 3000);
+        flashError(errKey, 'Enter a valid number');
         return;
       }
       parsedValue = editValue.trim() === '' ? '' : num;
@@ -127,8 +150,7 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
       if (lower === 'true' || lower === 'false') {
         parsedValue = lower === 'true';
       } else {
-        setCellErrors((prev) => ({ ...prev, [`${rowId}-${columnId}`]: 'Use true or false' }));
-        setTimeout(() => setCellErrors((prev) => { const n = { ...prev }; delete n[`${rowId}-${columnId}`]; return n; }), 3000);
+        flashError(errKey, 'Use true or false');
         return;
       }
     }
@@ -140,77 +162,65 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
       newValues[String(columnId)] = parsedValue;
     }
 
-    await updateRow(rowId, newValues);
+    doneRef.current = true;
     setEditingCell(null);
     setEditValue('');
+    gridRef.current?.focus();
+    await updateRow(rowId, newValues);
   };
 
   const cancelEdit = () => {
+    doneRef.current = true;
     setEditingCell(null);
     setEditValue('');
+    gridRef.current?.focus();
   };
 
-  const renderCell = (row, column) => {
-    const key = `${row.id}-${column.id}`;
-    const hasError = cellErrors[key];
-    const rawValue = row.values?.[String(column.id)];
-    const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === column.id;
-
-    const baseClasses = 'h-10 px-3 text-sm outline-none transition min-w-[140px] border-r border-zinc-200';
-    const errorClasses = hasError ? 'bg-red-50 border-red-300' : 'hover:bg-zinc-50';
-
-    if (isEditing) {
-      return (
-        <td key={key} className="p-0">
-          <input
-            ref={inputRef}
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={commitEdit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitEdit();
-              if (e.key === 'Escape') cancelEdit();
-            }}
-            className={`${baseClasses} w-full border-2 border-red-400 bg-white focus:ring-1 focus:ring-red-400/30`}
-            placeholder={column.type === 'BOOLEAN' ? 'true/false' : column.type === 'NUMBER' ? '0' : ''}
-          />
-        </td>
-      );
-    }
-
-    const displayValue = rawValue != null ? String(rawValue) : '';
-
-    if (column.type === 'BOOLEAN') {
-      return (
-        <td
-          key={key}
-          className={`${baseClasses} ${errorClasses} cursor-pointer`}
-          onClick={() => startEdit(row.id, column.id)}
-          onDoubleClick={() => startEdit(row.id, column.id)}
-        >
-          {rawValue != null ? (
-            <span className={`inline-flex items-center gap-1.5 ${rawValue ? 'text-emerald-600' : 'text-red-500'}`}>
-              <span className={`h-3 w-3 rounded-full ${rawValue ? 'bg-emerald-500' : 'bg-red-400'}`} />
-              {String(rawValue)}
-            </span>
-          ) : (
-            <span className="text-zinc-300">—</span>
-          )}
-        </td>
-      );
-    }
-
-    return (
-      <td
-        key={key}
-        className={`${baseClasses} ${errorClasses} cursor-pointer`}
-        onClick={() => startEdit(row.id, column.id)}
-        onDoubleClick={() => startEdit(row.id, column.id)}
-      >
-        {displayValue || <span className="text-zinc-300">—</span>}
-      </td>
-    );
+  const clearCell = (rowId, columnId) => {
+    const row = rows.find((r) => r.id === rowId);
+    if (!row) return;
+    const newValues = { ...row.values };
+    delete newValues[String(columnId)];
+    updateRow(rowId, newValues);
   };
+
+  /* ───────────── Keyboard navigation ───────────── */
+
+  const handleGridKeyDown = (e) => {
+    if (editingCell || !selectedCell) return;
+    if (e.target.tagName === 'INPUT') return; // new-row inputs handle their own keys
+
+    const ri = rows.findIndex((r) => r.id === selectedCell.rowId);
+    const ci = columns.findIndex((c) => c.id === selectedCell.columnId);
+    if (ri < 0 || ci < 0) return;
+
+    const move = (dr, dc) => {
+      const nr = Math.min(Math.max(ri + dr, 0), rows.length - 1);
+      const nc = Math.min(Math.max(ci + dc, 0), columns.length - 1);
+      setSelectedCell({ rowId: rows[nr].id, columnId: columns[nc].id });
+    };
+
+    switch (e.key) {
+      case 'ArrowUp': e.preventDefault(); move(-1, 0); break;
+      case 'ArrowDown': e.preventDefault(); move(1, 0); break;
+      case 'ArrowLeft': e.preventDefault(); move(0, -1); break;
+      case 'ArrowRight': e.preventDefault(); move(0, 1); break;
+      case 'Tab': e.preventDefault(); move(0, e.shiftKey ? -1 : 1); break;
+      case 'Enter':
+      case 'F2': e.preventDefault(); startEdit(selectedCell.rowId, selectedCell.columnId); break;
+      case 'Escape': setSelectedCell(null); break;
+      case 'Delete':
+      case 'Backspace': e.preventDefault(); clearCell(selectedCell.rowId, selectedCell.columnId); break;
+      default:
+        // typing a character starts editing and replaces the content
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          startEdit(selectedCell.rowId, selectedCell.columnId, e.key);
+        }
+    }
+  };
+
+  /* ───────────── New row ───────────── */
 
   const handleNewRowValue = (columnId, value) => {
     setNewRowValues((prev) => ({ ...prev, [String(columnId)]: value }));
@@ -229,6 +239,97 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
     if (hasData) addRow(values);
   };
 
+  const newRowEmpty = Object.values(newRowValues).every((v) => !v || !v.trim());
+
+  /* ───────────── Cell rendering ───────────── */
+
+  const renderCell = (row, column, colIdx) => {
+    const key = `${row.id}-${column.id}`;
+    const errMsg = cellErrors[key] || cellErrors[`row-${row.id}`];
+    const rawValue = row.values?.[String(column.id)];
+    const isSelected = selectedCell?.rowId === row.id && selectedCell?.columnId === column.id;
+    const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === column.id;
+    const isPrimary = colIdx === 0;
+
+    const tdClasses = [
+      'relative h-9 min-w-[180px] border-b border-r border-zinc-200/80 p-0 text-sm text-zinc-800',
+      errMsg ? 'bg-red-50' : 'bg-white group-hover:bg-zinc-50',
+      isPrimary ? 'sticky left-[84px] z-10' : '',
+    ].join(' ');
+
+    const selectedOverlay = (
+      <>
+        <div className="pointer-events-none absolute inset-0 z-10 border-2 border-red-500" />
+        {!isEditing && (
+          <>
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => startEdit(row.id, column.id)}
+              className="absolute right-1.5 top-1/2 z-20 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded bg-zinc-100 text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-800"
+              title="Edit cell"
+            >
+              <Maximize2 className="h-3 w-3" />
+            </button>
+            <div className="pointer-events-none absolute -bottom-[4px] -right-[4px] z-20 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+          </>
+        )}
+      </>
+    );
+
+    if (isEditing) {
+      return (
+        <td key={key} className={tdClasses} title={errMsg || undefined}>
+          <input
+            ref={inputRef}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
+              if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+              if (e.key === 'Tab') { e.preventDefault(); commitEdit(); }
+            }}
+            className={`h-full w-full bg-white px-3 text-sm outline-none ${column.type === 'NUMBER' ? 'text-right tabular-nums' : ''}`}
+            placeholder={column.type === 'BOOLEAN' ? 'true / false' : column.type === 'NUMBER' ? '0' : ''}
+          />
+          {selectedOverlay}
+        </td>
+      );
+    }
+
+    let content;
+    if (column.type === 'BOOLEAN' && rawValue != null) {
+      content = (
+        <span className={`inline-flex items-center gap-1.5 ${rawValue ? 'text-emerald-700' : 'text-zinc-500'}`}>
+          <span className={`h-2.5 w-2.5 rounded-full ${rawValue ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
+          {String(rawValue)}
+        </span>
+      );
+    } else if (rawValue != null && String(rawValue) !== '') {
+      content = <span className="truncate">{String(rawValue)}</span>;
+    } else {
+      content = null;
+    }
+
+    return (
+      <td
+        key={key}
+        className={tdClasses}
+        title={errMsg || undefined}
+        onClick={() => { setSelectedCell({ rowId: row.id, columnId: column.id }); gridRef.current?.focus(); }}
+        onDoubleClick={() => startEdit(row.id, column.id)}
+      >
+        <div className={`flex h-full items-center px-3 ${column.type === 'NUMBER' ? 'justify-end tabular-nums' : ''}`}>
+          {content}
+        </div>
+        {isSelected && selectedOverlay}
+      </td>
+    );
+  };
+
+  /* ───────────── Empty state ───────────── */
+
   if (columns.length === 0 && rows.length === 0) {
     return (
       <div className="flex min-h-[400px] flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-zinc-300 bg-zinc-50/50 px-8 py-12">
@@ -244,14 +345,19 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
           <Plus className="h-4 w-4" />
           Add column
         </button>
+        {isAddColumnOpen && (
+          <AddColumnDialog onAdd={addColumn} onClose={() => setIsAddColumnOpen(false)} nextPosition={0} />
+        )}
       </div>
     );
   }
 
+  /* ───────────── Grid ───────────── */
+
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm shadow-zinc-900/[0.03] overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm shadow-zinc-900/[0.03]">
       {error && (
-        <div className="mx-5 mt-5 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700 md:mx-7">
+        <div className="m-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span className="flex-1">{error}</span>
           <button onClick={() => setError('')} className="rounded p-0.5 hover:bg-red-100">
@@ -260,31 +366,59 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse min-w-[600px]">
+      <div
+        ref={gridRef}
+        tabIndex={0}
+        onKeyDown={handleGridKeyDown}
+        className="max-h-[70vh] overflow-auto outline-none"
+      >
+        <table className="w-full min-w-[640px] border-separate border-spacing-0">
           <thead>
             <tr>
-              <th className="h-10 w-[52px] min-w-[52px] bg-zinc-100 px-2 text-left text-xs font-medium text-zinc-400 border-b border-zinc-200 sticky left-0 z-10" />
-              {columns.map((col) => (
-                <th key={col.id} className="h-10 min-w-[140px] bg-zinc-100 px-3 text-left text-xs font-semibold text-zinc-700 border-b border-zinc-200 border-r border-zinc-200 group">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate">{col.name}</span>
-                    <span className="hidden group-hover:flex items-center gap-1 shrink-0">
+              {/* Gutter header */}
+              <th
+                style={{ width: GUTTER, minWidth: GUTTER }}
+                className="sticky left-0 top-0 z-30 h-[68px] border-b border-r border-zinc-200/80 bg-white px-3 text-left align-bottom"
+              >
+                <span className="mb-3 block text-xs font-medium text-zinc-400">
+                  {rows.length} {rows.length === 1 ? 'row' : 'rows'}
+                </span>
+              </th>
+
+              {columns.map((col, i) => {
+                const { icon: TypeIcon, label } = typeMeta(col.type);
+                return (
+                  <th
+                    key={col.id}
+                    className={`group sticky top-0 h-[68px] min-w-[180px] border-b border-r border-zinc-200/80 bg-white px-3 text-left align-middle ${
+                      i === 0 ? 'left-[84px] z-30' : 'z-20'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-zinc-900">{col.name}</div>
+                        <div className="mt-1.5 flex items-center gap-1.5 text-xs font-normal text-zinc-400">
+                          <TypeIcon className="h-3.5 w-3.5" />
+                          <span>{i === 0 ? `${label} · Primary` : label}</span>
+                        </div>
+                      </div>
                       <button
                         onClick={() => deleteColumn(col.id)}
-                        className="h-5 w-5 flex items-center justify-center rounded text-zinc-400 hover:text-red-500 hover:bg-red-50"
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-zinc-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
                         title={`Delete ${col.name}`}
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
-                    </span>
-                  </div>
-                </th>
-              ))}
-              <th className="h-10 w-[52px] min-w-[52px] bg-zinc-100 border-b border-zinc-200">
+                    </div>
+                  </th>
+                );
+              })}
+
+              {/* Add column */}
+              <th className="sticky top-0 z-20 h-[68px] w-[56px] min-w-[56px] border-b border-zinc-200/80 bg-white">
                 <button
                   onClick={() => setIsAddColumnOpen(true)}
-                  className="flex h-full w-full items-center justify-center text-zinc-400 hover:text-red-600 transition"
+                  className="flex h-full w-full items-center justify-center text-zinc-400 transition hover:bg-zinc-50 hover:text-red-600"
                   title="Add column"
                 >
                   <Plus className="h-4 w-4" />
@@ -292,52 +426,70 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
               </th>
             </tr>
           </thead>
-          <tbody>
-            {rows.map((row, idx) => (
-              <tr key={row.id} className="group">
-                <td className="h-10 w-[52px] min-w-[52px] bg-zinc-50 px-2 text-xs text-zinc-400 border-b border-zinc-100 border-r border-zinc-200 sticky left-0 z-10 font-mono">
-                  {idx + 1}
-                </td>
-                {columns.map((col) => renderCell(row, col))}
-                <td className="h-10 w-[52px] border-b border-zinc-100">
-                  <button
-                    onClick={() => deleteRow(row.id)}
-                    className="h-full w-full flex items-center justify-center text-zinc-300 opacity-0 group-hover:opacity-100 hover:text-red-500 transition"
-                    title="Delete row"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </td>
-              </tr>
-            ))}
 
-            {/* Add row row */}
+          <tbody>
+            {rows.map((row, idx) => {
+              const rowSelected = selectedCell?.rowId === row.id;
+              return (
+                <tr key={row.id} className="group">
+                  <td
+                    style={{ width: GUTTER, minWidth: GUTTER }}
+                    className={`sticky left-0 z-20 h-9 border-b border-r border-zinc-200/80 px-3 ${
+                      rowSelected ? 'bg-zinc-100' : 'bg-white group-hover:bg-zinc-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs font-semibold tabular-nums ${rowSelected ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                        {idx + 1}
+                      </span>
+                      <button
+                        onClick={() => deleteRow(row.id)}
+                        className="flex h-6 w-6 items-center justify-center rounded text-zinc-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                        title="Delete row"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                  {columns.map((col, ci) => renderCell(row, col, ci))}
+                  <td className="h-9 border-b border-zinc-200/80 bg-white group-hover:bg-zinc-50" />
+                </tr>
+              );
+            })}
+
+            {/* Add row */}
             <tr className="group">
-              <td className="h-10 w-[52px] min-w-[52px] bg-zinc-50 px-2 text-xs text-zinc-400 border-b border-zinc-100 border-r border-zinc-200 sticky left-0 z-10 font-mono">
-                {rows.length + 1}
+              <td
+                style={{ width: GUTTER, minWidth: GUTTER }}
+                className="sticky left-0 z-20 h-9 border-b border-r border-zinc-200/80 bg-white px-3"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold tabular-nums text-zinc-300">{rows.length + 1}</span>
+                  <button
+                    onClick={commitNewRow}
+                    disabled={isSubmitting || newRowEmpty}
+                    className="flex h-6 w-6 items-center justify-center rounded text-zinc-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
+                    title="Add row"
+                  >
+                    {isSubmitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  </button>
+                </div>
               </td>
-              {columns.map((col) => (
-                <td key={`new-${col.id}`} className="p-0">
+              {columns.map((col, ci) => (
+                <td
+                  key={`new-${col.id}`}
+                  className={`h-9 border-b border-r border-zinc-200/80 bg-white p-0 focus-within:bg-white ${ci === 0 ? 'sticky left-[84px] z-10' : ''} ${cellErrors.new ? 'bg-red-50' : ''}`}
+                >
                   <input
                     value={newRowValues[String(col.id)] || ''}
                     onChange={(e) => handleNewRowValue(col.id, e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') commitNewRow(); }}
-                    onBlur={() => { /* don't auto-commit on blur for new row */ }}
-                    placeholder={col.type === 'BOOLEAN' ? 'true/false' : col.type === 'NUMBER' ? '0' : ''}
-                    className="h-10 w-full px-3 text-sm outline-none transition border-r border-zinc-200 bg-transparent placeholder:text-zinc-300 focus:bg-white"
+                    placeholder={ci === 0 ? 'Add a row…' : col.type === 'BOOLEAN' ? 'true / false' : col.type === 'NUMBER' ? '0' : ''}
+                    className={`h-full w-full bg-transparent px-3 text-sm outline-none placeholder:text-zinc-300 focus:ring-2 focus:ring-inset focus:ring-red-500 ${col.type === 'NUMBER' ? 'text-right tabular-nums' : ''}`}
                   />
                 </td>
               ))}
-              <td className="h-10 w-[52px] border-b border-zinc-100">
-                <button
-                  onClick={commitNewRow}
-                  disabled={isSubmitting || Object.values(newRowValues).every((v) => !v || !v.trim())}
-                  className="h-full w-full flex items-center justify-center text-zinc-400 hover:text-red-600 transition disabled:opacity-30 disabled:cursor-not-allowed"
-                  title="Add row"
-                >
-                  {isSubmitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                </button>
-              </td>
+              <td className="h-9 border-b border-zinc-200/80 bg-white" />
             </tr>
           </tbody>
         </table>

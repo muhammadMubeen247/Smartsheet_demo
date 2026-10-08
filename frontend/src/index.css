@@ -52,6 +52,7 @@ input {
 }
 
 .workspace-browser-grid {
+  display: grid;
   grid-template-columns: minmax(210px, 250px) minmax(0, 1fr);
 }
 

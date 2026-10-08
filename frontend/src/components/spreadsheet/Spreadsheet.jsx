@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Plus, Trash2, LoaderCircle, AlertCircle, X, Type, Hash, ToggleLeft, CalendarDays, Maximize2 } from 'lucide-react';
+import { Plus, Trash2, LoaderCircle, AlertCircle, X, Type, Hash, ToggleLeft, CalendarDays, Maximize2, MoreHorizontal } from 'lucide-react';
 import api from '../../lib/api';
 import { AddColumnDialog } from './AddColumnDialog';
+import { ColumnOptionsMenu } from './ColumnOptionsMenu';
 
 const GUTTER = 84; // px, width of the row-number gutter (keep in sync with the left-[84px] classes below)
 
@@ -30,6 +31,8 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cellErrors, setCellErrors] = useState({});
   const [columnWidths, setColumnWidths] = useState(() => new Map());
+  const [openMenu, setOpenMenu] = useState(null); // columnId of the open menu
+  const [pendingInsert, setPendingInsert] = useState(null); // { referenceColumnId, direction }
 
   const inputRef = useRef(null);
   const gridRef = useRef(null);
@@ -169,6 +172,35 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
     }
   }, [sheetId]);
 
+  const renameColumn = useCallback(async (columnId, name) => {
+    try {
+      await api.put(`/sheets/${sheetId}/columns/${columnId}`, { name });
+      setColumns((prev) => prev.map((c) => (c.id === columnId ? { ...c, name } : c)));
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to rename column');
+    }
+  }, [sheetId]);
+
+  const insertColumn = useCallback(async ({ referenceColumnId, direction, name, type }) => {
+    try {
+      const { data } = await api.post(`/sheets/${sheetId}/columns/${referenceColumnId}/insert`, { direction, name, type });
+      setColumns((prev) => {
+        const updated = [...prev, data.data].sort((a, b) => a.position - b.position);
+        colTypes.current.set(String(data.data.id), data.data.type);
+        colNames.current.set(String(data.data.id), data.data.name);
+        return updated;
+      });
+      setPendingInsert(null);
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to insert column');
+    }
+  }, [sheetId]);
+
+  const openInsertDialog = useCallback((referenceColumnId, direction) => {
+    setOpenMenu(null);
+    setPendingInsert({ referenceColumnId, direction });
+  }, []);
+
   /* ───────────── Editing ───────────── */
 
   const startEdit = (rowId, columnId, seed) => {
@@ -304,7 +336,7 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
     const isPrimary = colIdx === 0;
 
     const tdClasses = [
-      'relative h-9 min-w-[120px] border-b border-r border-zinc-200/80 p-0 text-sm text-zinc-800',
+      'relative h-9 min-w-[120px] cursor-text border-b border-r border-zinc-200/80 p-0 text-sm text-zinc-800',
       errMsg ? 'bg-red-50' : 'bg-white group-hover:bg-zinc-50',
       isPrimary ? 'sticky left-[84px] z-10' : '',
     ].join(' ');
@@ -405,7 +437,7 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
           Add column
         </button>
         {isAddColumnOpen && (
-          <AddColumnDialog onAdd={addColumn} onClose={() => setIsAddColumnOpen(false)} nextPosition={0} />
+          <AddColumnDialog onAdd={addColumn} onClose={() => setIsAddColumnOpen(false)} />
         )}
       </div>
     );
@@ -431,7 +463,7 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
         onKeyDown={handleGridKeyDown}
         className="max-h-[70vh] overflow-auto outline-none"
       >
-        <table className="w-full min-w-[640px] border-separate border-spacing-0">
+        <table className="min-w-[640px] table-fixed border-separate border-spacing-0">
           <thead>
             <tr>
               {/* Gutter header */}
@@ -464,13 +496,23 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
                         </div>
                       </div>
                       <button
-                        onClick={() => deleteColumn(col.id)}
-                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-zinc-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
-                        title={`Delete ${col.name}`}
+                        onClick={() => setOpenMenu(openMenu === col.id ? null : col.id)}
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-zinc-400 opacity-0 transition hover:bg-zinc-100 hover:text-zinc-700 group-hover:opacity-100"
+                        title="Column options"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <MoreHorizontal className="h-4 w-4" />
                       </button>
                     </div>
+                    {openMenu === col.id && (
+                      <ColumnOptionsMenu
+                        column={col}
+                        isPrimary={i === 0}
+                        onRename={renameColumn}
+                        onInsert={openInsertDialog}
+                        onDelete={deleteColumn}
+                        onClose={() => setOpenMenu(null)}
+                      />
+                    )}
                     <div
                       onMouseDown={(e) => handleResizeStart(col.id, e)}
                       className="absolute inset-y-0 right-0 z-30 w-1 cursor-col-resize hover:bg-red-500 active:bg-red-500"
@@ -566,7 +608,16 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
         <AddColumnDialog
           onAdd={addColumn}
           onClose={() => setIsAddColumnOpen(false)}
-          nextPosition={columns.length > 0 ? Math.max(...columns.map((c) => c.position)) + 1 : 0}
+        />
+      )}
+
+      {pendingInsert && (
+        <AddColumnDialog
+          mode="insert"
+          direction={pendingInsert.direction}
+          referenceColumnId={pendingInsert.referenceColumnId}
+          onInsert={insertColumn}
+          onClose={() => setPendingInsert(null)}
         />
       )}
     </div>

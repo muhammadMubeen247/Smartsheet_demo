@@ -39,4 +39,6 @@ router.put(
 
 router.delete('/:sheetId/columns/:columnId', columnsController.remove);
 
+router.post('/:sheetId/columns/:columnId/insert', columnsController.insert);
+
 module.exports = router;

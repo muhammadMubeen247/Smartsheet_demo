@@ -1,5 +1,6 @@
 const columnsService = require('./columns.service');
 const { assertSheetOwnership, assertColumnOwnership } = require('../auth/ownership.service');
+const { BadRequestError } = require('../../utils/errors');
 
 async function create(req, res, next) {
   try {
@@ -53,9 +54,25 @@ async function remove(req, res, next) {
   }
 }
 
+async function insert(req, res, next) {
+  try {
+    const { sheetId, columnId } = req.params;
+    const { direction, name, type } = req.body;
+    if (!direction || !['left', 'right'].includes(direction)) {
+      throw new BadRequestError('Direction must be "left" or "right"');
+    }
+    await assertSheetOwnership(sheetId, req.user.id);
+    const column = await columnsService.insert(sheetId, columnId, direction, { name, type });
+    res.status(201).json({ data: column });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   create,
   listBySheet,
   update,
-  remove
+  remove,
+  insert
 };

@@ -403,6 +403,107 @@
 
 ---
 
+## Sprint 5: Enhanced Spreadsheet Functionality
+
+### Phase 1: Backend — Default Rows and Columns on Sheet Creation
+- Updated `sheets.service.js` to automatically initialize new sheets with:
+  - 6 default columns: Primary Column, Column 2, Column 3, Column 4, Column 5, Column 6
+  - 50 empty rows with JSONB values objects
+  - Columns created with TEXT type and sequential positions
+  - All initialization wrapped in Prisma transaction for data integrity
+
+### Phase 2: Backend — Column Insert (Left/Right) with Position Shifting
+- Added `insert()` method to `columns.service.js`:
+  - Accepts sheetId, columnId, and direction (left/right)
+  - Calculates target position based on reference column
+  - Shifts all subsequent columns' positions by +1 using raw SQL
+  - Generates unique column name ("Column N")
+  - Creates new column at calculated position
+- Added `insert()` controller in `columns.controller.js`
+- Created new route: `POST /sheets/:sheetId/columns/:columnId/insert`
+
+### Phase 3: Backend — Column Rename (Already Existed)
+- Verified existing `PUT /sheets/:sheetId/columns/:columnId` endpoint supports name updates
+- No changes needed — already functional
+
+### Phase 4: Frontend — Column Options Menu Component
+- Created `ColumnOptionsMenu.jsx`:
+  - Dropdown menu with options: Rename, Insert Left, Insert Right, Delete
+  - Inline rename mode with text input
+  - Click-outside detection to close menu
+  - Keyboard support (Escape to cancel rename)
+  - Primary column protection (delete disabled)
+  - Visual divider before destructive actions
+  - Positioned absolutely below column header
+
+### Phase 5: Frontend — Three-Dots Menu Button
+- Replaced delete-only button with three-dots menu icon (MoreHorizontal)
+- Added hover state with subtle background
+- Toggles menu visibility on click
+- Only visible on column hover (opacity transition)
+
+### Phase 6: Frontend — Wire Up Column Actions
+- Added `renameColumn()` function:
+  - Calls PUT endpoint with new name
+  - Updates local state on success
+  - Displays error on failure
+- Added `insertColumn()` function:
+  - Calls POST insert endpoint with direction
+  - Appends new column to local state
+  - Sorts columns by position
+  - Updates column type/name refs
+- Integrated ColumnOptionsMenu with header rendering
+- Added `openMenu` state to track which column's menu is open
+
+### Phase 7: Build Verification
+- Ran `npm run build` successfully
+- No compilation errors
+- All new components properly integrated
+- Bundle size: 504.37 kB (within acceptable range)
+
+### Phase 8: Frontend — Column Insert with Name/Type Dialog
+- Added `pendingInsert` state to `Spreadsheet.jsx` tracking `{ referenceColumnId, direction }`
+- Created `openInsertDialog` helper that closes the column menu and opens the dialog
+- Reused `AddColumnDialog` in `mode="insert"` — hides position field, shows "Insert" button
+- Dialog prompts user for column name and type before creating the inserted column
+- `insertColumn` now sends `{ direction, name, type }` to the backend insert endpoint
+- `ColumnOptionsMenu` triggers `openInsertDialog(columnId, direction)` instead of making a direct API call
+
+### Phase 9: Frontend — Horizontal Scrolling
+- Removed `w-full` from the `<table>` element in `Spreadsheet.jsx`
+- Table now expands to its natural width based on column widths, enabling horizontal scroll inside the `overflow-auto` container
+- Primary column and gutter remain sticky via existing `sticky left-*` classes
+
+### Phase 10: Final Build Verification
+- Ran `npm run build` successfully
+- No compilation errors
+- Bundle size: 504.93 kB (within acceptable range)
+
+### Sprint 5 Summary
+
+| Module | Status |
+|--------|--------|
+| Default rows/columns on sheet creation | ✅ Done |
+| Column insert left/right endpoint | ✅ Done |
+| Column rename endpoint (verified) | ✅ Done |
+| Column options menu component | ✅ Done |
+| Three-dots menu button | ✅ Done |
+| Rename action wired up | ✅ Done |
+| Insert left/right actions with dialog | ✅ Done |
+| Insert dialog prompts for name/type | ✅ Done |
+| Horizontal scrolling for wide tables | ✅ Done |
+| Build verification | ✅ Done |
+
+### Key Decisions
+- Default sheet initialization uses Prisma transaction to ensure atomicity
+- Column insert shifts positions using two-step raw SQL (TEMP_OFFSET=100000) to avoid PostgreSQL unique constraint violations on `("sheetId", "position")`
+- `AddColumnDialog` reused for both append and insert via `mode` prop (`'create'` vs `'insert'`)
+- Column options menu provides inline rename rather than modal dialog
+- Primary column cannot be deleted to maintain data structure integrity
+- Horizontal scrolling achieved by removing `w-full` from the table, letting it expand to natural width inside an `overflow-auto` container
+
+---
+
 ## Documentation
 - `README.md` — full API documentation with endpoints, auth instructions, project structure, testing guide
 - `Progress.md` — this file, development progress log organized by sprints

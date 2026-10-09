@@ -83,7 +83,7 @@ export function SheetView() {
     <div className="min-h-screen bg-zinc-100">
       <Sidebar collapsed />
       
-      <main className="ml-[72px] min-h-screen">
+      <main className="ml-[72px] min-h-screen min-w-0">
         {/* Sheet header bar */}
         <header className="flex h-[56px] items-center justify-between border-b border-zinc-200 bg-white px-4 sm:px-6">
           <div className="flex items-center gap-3 min-w-0">
@@ -103,14 +103,14 @@ export function SheetView() {
           </div>
         </header>
 
-        <div className="p-4 sm:p-6">
+        <div className="min-w-0 p-4 sm:p-6">
           <SheetHeader sheet={sheet} workspaceId={workspaceId} onRename={handleRename} />
 
           <div className="mt-6">
             <Toolbar />
           </div>
 
-          <div className="mt-4">
+          <div className="mt-4 min-w-0">
             <Spreadsheet
               sheetId={sheetId}
               columns={columns}

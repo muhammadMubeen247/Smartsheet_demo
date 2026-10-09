@@ -312,15 +312,13 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
 
   const commitNewRow = () => {
     const values = {};
-    let hasData = false;
     columns.forEach((col) => {
       const v = newRowValues[String(col.id)];
       if (v != null && v.trim() !== '') {
         values[String(col.id)] = col.type === 'NUMBER' ? parseFloat(v) : col.type === 'BOOLEAN' ? v.toLowerCase() === 'true' : v;
-        hasData = true;
       }
     });
-    if (hasData) addRow(values);
+    addRow(values);
   };
 
   const newRowEmpty = Object.values(newRowValues).every((v) => !v || !v.trim());
@@ -461,9 +459,9 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
         ref={gridRef}
         tabIndex={0}
         onKeyDown={handleGridKeyDown}
-        className="max-h-[70vh] overflow-auto outline-none"
+        className="w-full max-w-full max-h-[70vh] overflow-auto outline-none"
       >
-        <table className="min-w-[640px] table-fixed border-separate border-spacing-0">
+        <table className="w-max min-w-full table-fixed border-separate border-spacing-0">
           <thead>
             <tr>
               {/* Gutter header */}
@@ -575,9 +573,10 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
                   <span className="text-xs font-semibold tabular-nums text-zinc-300">{rows.length + 1}</span>
                   <button
                     onClick={commitNewRow}
-                    disabled={isSubmitting || newRowEmpty}
+                    disabled={isSubmitting}
                     className="flex h-6 w-6 items-center justify-center rounded text-zinc-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
-                    title="Add row"
+                    title={newRowEmpty ? 'Add empty row' : 'Add row'}
+                    aria-label={newRowEmpty ? 'Add empty row' : 'Add row'}
                   >
                     {isSubmitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   </button>

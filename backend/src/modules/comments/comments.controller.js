@@ -84,6 +84,17 @@ async function createReply(req, res, next) {
   }
 }
 
+async function getCommentedRows(req, res, next) {
+  try {
+    const { sheetId } = req.params;
+    await assertCanView(sheetId, req.user.id);
+    const commentedRows = await commentsService.getCommentedRows(sheetId);
+    res.json({ data: commentedRows });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function update(req, res, next) {
   try {
     const { commentId, sheetId } = req.params;
@@ -113,9 +124,22 @@ async function remove(req, res, next) {
   }
 }
 
+async function getConversations(req, res, next) {
+  try {
+    const { sheetId } = req.params;
+    await assertCanView(sheetId, req.user.id);
+    const conversations = await commentsService.getConversations(sheetId);
+    res.json({ data: conversations });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   listBySheet,
   listByRow,
+  getCommentedRows,
+  getConversations,
   createSheetComment,
   createRowComment,
   createReply,

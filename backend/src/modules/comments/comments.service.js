@@ -142,11 +142,66 @@ async function remove(commentId, userId, isOwner) {
   await prisma.comment.delete({ where: { id: parsedCommentId } });
 }
 
+async function getCommentedRows(sheetId) {
+  const rows = await prisma.comment.groupBy({
+    by: ['rowId'],
+    where: {
+      sheetId: parseInt(sheetId, 10),
+      rowId: { not: null }
+    },
+    _count: {
+      rowId: true
+    }
+  });
+  return rows.map((r) => ({ rowId: r.rowId, count: r._count.rowId }));
+}
+
+async function getConversations(sheetId) {
+  const comments = await prisma.comment.findMany({
+    where: {
+      sheetId: parseInt(sheetId, 10),
+      parentCommentId: null
+    },
+    include: {
+      author: { select: { id: true, name: true, email: true } },
+      replies: {
+        include: { author: { select: { id: true, name: true, email: true } } },
+        orderBy: { createdAt: 'asc' }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  // Group by rowId
+  const threads = new Map();
+  for (const c of comments) {
+    const key = c.rowId ?? 'sheet';
+    if (!threads.has(key)) {
+      threads.set(key, { rowId: c.rowId, comments: [], lastActivity: c.createdAt });
+    }
+    const thread = threads.get(key);
+    thread.comments.push(c);
+    // Track most recent activity (latest reply or comment)
+    const latestReply = c.replies.length > 0 ? c.replies[c.replies.length - 1].createdAt : null;
+    const activity = latestReply && new Date(latestReply) > new Date(thread.lastActivity) ? latestReply : c.createdAt;
+    if (new Date(activity) > new Date(thread.lastActivity)) {
+      thread.lastActivity = activity;
+    }
+  }
+
+  // Sort threads by most recent activity (descending)
+  return Array.from(threads.values()).sort(
+    (a, b) => new Date(b.lastActivity) - new Date(a.lastActivity)
+  );
+}
+
 module.exports = {
   listBySheet,
   listByRow,
   create,
   createReply,
   update,
-  remove
+  remove,
+  getCommentedRows,
+  getConversations
 };

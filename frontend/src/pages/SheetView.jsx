@@ -7,6 +7,8 @@ import { Sidebar } from '../components/layout/Sidebar';
 import { SheetHeader } from '../components/spreadsheet/SheetHeader';
 import { Toolbar } from '../components/spreadsheet/Toolbar';
 import { Spreadsheet } from '../components/spreadsheet/Spreadsheet';
+import { CommentPanel } from '../components/spreadsheet/CommentPanel';
+import { ConversationsPanel } from '../components/spreadsheet/ConversationsPanel';
 
 function errorMessage(error, fallback) {
   return error.response?.data?.error?.message || fallback;
@@ -20,8 +22,11 @@ export function SheetView() {
   const [sheet, setSheet] = useState(null);
   const [columns, setColumns] = useState([]);
   const [rows, setRows] = useState([]);
+  const [commentedRows, setCommentedRows] = useState(new Set()); // rowIds that have comments
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [commentRowId, setCommentRowId] = useState(null);
+  const [showConversations, setShowConversations] = useState(false); // rowId to show comment panel for
 
   const loadSheet = useCallback(() => {
     setLoading(true);
@@ -30,11 +35,13 @@ export function SheetView() {
     Promise.all([
       api.get(`/sheets/${sheetId}`).catch((err) => { throw new Error(errorMessage(err, 'Unable to load this sheet.')); }),
       api.get(`/sheets/${sheetId}/rows`).catch((err) => { throw new Error(errorMessage(err, 'Unable to load rows.')); }),
+      api.get(`/sheets/${sheetId}/rows/commented`).catch(() => ({ data: { data: [] } })), // non-blocking
     ])
-      .then(([sheetRes, rowsRes]) => {
+      .then(([sheetRes, rowsRes, commentedRes]) => {
         setSheet(sheetRes.data.data);
         setColumns(sheetRes.data.data.columns?.sort((a, b) => a.position - b.position) || []);
         setRows(rowsRes.data.data || []);
+        setCommentedRows(new Set((commentedRes.data.data || []).map((r) => r.rowId)));
       })
       .catch((err) => {
         setError(err.message || 'Unable to load this sheet.');
@@ -51,6 +58,39 @@ export function SheetView() {
   const handleRename = (updatedSheet) => {
     setSheet(updatedSheet);
   };
+
+  const handleCommentRow = useCallback((rowId) => {
+    setCommentRowId(rowId);
+  }, []);
+
+  const refreshCommentedRows = useCallback(async () => {
+    try {
+      const { data } = await api.get(`/sheets/${sheetId}/rows/commented`);
+      setCommentedRows(new Set((data.data || []).map((r) => r.rowId)));
+    } catch (err) {
+      // Silent fail - not critical
+    }
+  }, [sheetId]);
+
+  const closeCommentPanel = useCallback(() => {
+    setCommentRowId(null);
+    refreshCommentedRows();
+  }, [refreshCommentedRows]);
+
+  const handleOpenConversations = useCallback(() => {
+    setShowConversations(true);
+  }, []);
+
+  const handleCloseConversations = useCallback(() => {
+    setShowConversations(false);
+  }, []);
+
+  const handleThreadClick = useCallback((rowId) => {
+    if (rowId) {
+      setCommentRowId(rowId);
+      setShowConversations(false);
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -84,7 +124,6 @@ export function SheetView() {
       <Sidebar collapsed />
       
       <main className="ml-[72px] min-h-screen min-w-0">
-        {/* Sheet header bar */}
         <header className="flex h-[56px] items-center justify-between border-b border-zinc-200 bg-white px-4 sm:px-6">
           <div className="flex items-center gap-3 min-w-0">
             <button
@@ -104,10 +143,10 @@ export function SheetView() {
         </header>
 
         <div className="min-w-0 p-4 sm:p-6">
-          <SheetHeader sheet={sheet} workspaceId={workspaceId} onRename={handleRename} />
+          <SheetHeader sheet={sheet} workspaceId={workspaceId} onRename={handleRename} onOpenConversations={handleOpenConversations} />
 
           <div className="mt-6">
-            <Toolbar />
+            <Toolbar onComment={handleCommentRow} />
           </div>
 
           <div className="mt-4 min-w-0">
@@ -117,10 +156,33 @@ export function SheetView() {
               rows={rows}
               user={user}
               onRename={handleRename}
+              onCommentRow={handleCommentRow}
+              commentedRows={commentedRows}
+              scrollToRowId={commentRowId}
             />
           </div>
         </div>
       </main>
+
+      {commentRowId && (
+        <CommentPanel
+          sheetId={sheetId}
+          rowId={commentRowId}
+          rowLabel={`Row ${rows.findIndex((r) => r.id === commentRowId) + 1}`}
+          onClose={closeCommentPanel}
+          user={user}
+          onCommentChange={refreshCommentedRows}
+        />
+      )}
+
+      {showConversations && (
+        <ConversationsPanel
+          sheetId={sheetId}
+          onClose={handleCloseConversations}
+          onThreadClick={handleThreadClick}
+          rows={rows}
+        />
+      )}
     </div>
   );
 }

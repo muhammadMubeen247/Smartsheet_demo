@@ -9,6 +9,8 @@ const router = express.Router();
 router.use(auth);
 
 router.get('/sheets/:sheetId/comments', commentsController.listBySheet);
+router.get('/sheets/:sheetId/conversations', commentsController.getConversations);
+router.get('/sheets/:sheetId/rows/commented', commentsController.getCommentedRows);
 router.get('/sheets/:sheetId/rows/:rowId/comments', commentsController.listByRow);
 
 router.post(

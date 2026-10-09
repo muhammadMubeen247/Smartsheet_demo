@@ -635,3 +635,66 @@
 - Threading limited to one level: top-level comments can have replies, but replies cannot have replies
 - Shared-with-me endpoint mounted at `/sheets/shared-with-me` (not `/workspaces/:workspaceId/sheets/shared-with-me`) for easier access
 
+---
+
+## Sprint 7: Frontend Comment Functionality
+
+### Phase 1: CommentPanel Component
+- Created `frontend/src/components/spreadsheet/CommentPanel.jsx`:
+  - Right sidebar panel overlay (fixed position, z-50) with backdrop
+  - Header with "Conversations" title and close button
+  - Row selector (disabled, reflects current row being commented on)
+  - Comments list with author avatars (initials), timestamps, content
+  - Reply support: inline reply input per comment thread
+  - Comment input area with avatar, textarea, and send button
+  - Loading state (spinner), empty state ("Start the conversation"), error state
+  - Keyboard support: Enter to send (Shift+Enter for newline)
+  - Duplicate submission prevention (disabled while submitting)
+  - Empty comment prevention
+
+### Phase 2: Row-Level Comment Trigger
+- Added comment button to row gutter in `Spreadsheet.jsx`:
+  - Speech bubble icon (`MessageSquare`) next to the delete button
+  - Same hover/opacity pattern as existing gutter actions
+  - Calls `onCommentRow(rowId)` callback passed from SheetView
+
+### Phase 3: Toolbar Comment Button
+- Updated `Toolbar.jsx`:
+  - Added `onComment` prop
+  - Added `MessageSquare` icon button after existing toolbar groups
+  - Clicking opens the comment panel for the currently selected row
+
+### Phase 4: SheetView Integration
+- Updated `SheetView.jsx`:
+  - Added `commentRowId` state
+  - Added `handleCommentRow` and `closeCommentPanel` callbacks
+  - Passed `onCommentRow` to Spreadsheet component
+  - Passed `onComment` to Toolbar component
+  - Renders CommentPanel when `commentRowId` is set
+  - Passes `user` to CommentPanel for avatar display
+
+### Phase 5: Build Verification
+- Ran `npm run build` successfully
+- No compilation errors
+- Bundle size: 531.39 kB (acceptable)
+
+### Sprint 7 Summary
+
+| Module | Status |
+|--------|--------|
+| CommentPanel component | ✅ Done |
+| Row-level comment trigger in gutter | ✅ Done |
+| Toolbar comment button | ✅ Done |
+| SheetView integration | ✅ Done |
+| API integration (row-level comments + replies) | ✅ Done |
+| Loading, empty, error states | ✅ Done |
+| Empty comment / duplicate submission prevention | ✅ Done |
+| Build verification | ✅ Done |
+
+### Key Decisions
+- Row-level comments (not sheet-level) based on reference image showing comment icon in row gutter
+- CommentPanel rendered as a fixed-position overlay with backdrop (consistent with right sidebar pattern from sharing modal)
+- Reply textarea shown inline per comment rather than in a separate modal
+- Enter to send, Shift+Enter for newline — standard chat UX
+- User avatar shown as initials from `user.name`
+

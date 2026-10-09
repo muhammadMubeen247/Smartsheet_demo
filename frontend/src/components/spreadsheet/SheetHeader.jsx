@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { FileText, Share2, ChevronDown, LoaderCircle } from 'lucide-react';
+import { FileText, Share2, ChevronDown, LoaderCircle, MessageCircle } from 'lucide-react';
 import api from '../../lib/api';
 import { ShareDropdown } from './ShareDropdown';
 import { ShareModal } from './ShareModal';
 
-export function SheetHeader({ sheet, workspaceId, onRename }) {
+export function SheetHeader({ sheet, workspaceId, onRename, onOpenConversations }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(sheet.name);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,6 +73,14 @@ export function SheetHeader({ sheet, workspaceId, onRename }) {
       </div>
 
       <div className="relative flex items-center gap-2 self-start">
+        <button
+          className="inline-flex h-9 items-center gap-2 rounded-lg border border-zinc-300 px-3.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+          onClick={onOpenConversations}
+          title="View conversations"
+        >
+          <MessageCircle className="h-4 w-4" />
+        </button>
+        
         <button
           className="inline-flex h-9 items-center gap-2 rounded-lg bg-red-600 px-3.5 text-sm font-semibold text-white transition hover:bg-red-700"
           onClick={() => setShowShareDropdown((v) => !v)}

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Plus, Trash2, LoaderCircle, AlertCircle, X, Type, Hash, ToggleLeft, CalendarDays, Maximize2, MoreHorizontal } from 'lucide-react';
+import { Plus, Trash2, LoaderCircle, AlertCircle, X, Type, Hash, ToggleLeft, CalendarDays, Maximize2, MoreHorizontal, MessageSquare } from 'lucide-react';
 import api from '../../lib/api';
 import { AddColumnDialog } from './AddColumnDialog';
 import { ColumnOptionsMenu } from './ColumnOptionsMenu';
@@ -39,7 +39,7 @@ function parseCellValue(value, type) {
   return { value, error: null };
 }
 
-export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initialRows = [], user, onRename }) {
+export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initialRows = [], user, onRename, onCommentRow, commentedRows = new Set(), scrollToRowId }) {
   const [columns, setColumns] = useState(initialColumns);
   const [rows, setRows] = useState(initialRows);
   const [error, setError] = useState('');
@@ -398,6 +398,21 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
     }
   };
 
+  /* ───────────── Auto-scroll to row ───────────── */
+
+  useEffect(() => {
+    if (!scrollToRowId || !gridRef.current) return;
+    const el = gridRef.current.querySelector(`[data-row-id="${scrollToRowId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Also select the first cell in that row
+      const firstCol = columns[0];
+      if (firstCol) {
+        setSelectedCell({ rowId: scrollToRowId, columnId: firstCol.id });
+      }
+    }
+  }, [scrollToRowId, columns]);
+
   /* ───────────── New row ───────────── */
 
   const handleNewRowValue = (columnId, value) => {
@@ -631,7 +646,7 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
             {rows.map((row, idx) => {
               const rowSelected = selectedCell?.rowId === row.id;
               return (
-                <tr key={row.id} className="group">
+                <tr key={row.id} data-row-id={row.id} className="group">
                   <td
                     style={{ width: GUTTER, minWidth: GUTTER }}
                     className={`sticky left-0 z-20 h-9 border-b border-r border-zinc-200/80 px-3 ${
@@ -642,13 +657,26 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
                       <span className={`text-xs font-semibold tabular-nums ${rowSelected ? 'text-zinc-600' : 'text-zinc-400'}`}>
                         {idx + 1}
                       </span>
-                      <button
-                        onClick={() => deleteRow(row.id)}
-                        className="flex h-6 w-6 items-center justify-center rounded text-zinc-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
-                        title="Delete row"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          onClick={() => onCommentRow?.(row.id)}
+                          className={`flex h-6 w-6 items-center justify-center rounded transition hover:bg-zinc-100 hover:text-zinc-600 ${
+                            commentedRows.has(row.id)
+                              ? 'text-zinc-600 opacity-100'
+                              : 'text-zinc-300 opacity-0 group-hover:opacity-100'
+                          }`}
+                          title={commentedRows.has(row.id) ? 'View comments' : 'Add comment'}
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => deleteRow(row.id)}
+                          className="flex h-6 w-6 items-center justify-center rounded text-zinc-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                          title="Delete row"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </td>
                   {columns.map((col, ci) => renderCell(row, col, ci))}

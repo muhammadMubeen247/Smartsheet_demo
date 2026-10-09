@@ -34,8 +34,8 @@ app.use('/public/forms', publicFormsRoutes);
 app.use('/sheets', sharesRoutes);
 app.use('/', sheetsRoutes);
 app.use('/sheets', columnsRoutes);
-app.use('/sheets', rowsRoutes);
 app.use('/', commentsRoutes);
+app.use('/sheets', rowsRoutes);
 app.use('/', formsRoutes);
 
 app.use(notFoundHandler);

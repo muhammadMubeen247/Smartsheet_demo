@@ -662,9 +662,11 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
                           onClick={() => onCommentRow?.(row.id)}
                           className={`flex h-6 w-6 items-center justify-center rounded transition hover:bg-zinc-100 hover:text-zinc-600 ${
                             commentedRows.has(row.id)
-                              ? 'text-zinc-600 opacity-100'
+                              ? 'bg-red-50 text-red-600 opacity-100 hover:bg-red-100 hover:text-red-700'
                               : 'text-zinc-300 opacity-0 group-hover:opacity-100'
                           }`}
+                          aria-label={commentedRows.has(row.id) ? 'View row comments' : 'Add row comment'}
+                          aria-pressed={commentedRows.has(row.id)}
                           title={commentedRows.has(row.id) ? 'View comments' : 'Add comment'}
                         >
                           <MessageSquare className="h-3.5 w-3.5" />

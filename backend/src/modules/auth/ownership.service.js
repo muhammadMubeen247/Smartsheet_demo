@@ -17,6 +17,48 @@ async function assertWorkspaceOwnership(workspaceId, userId) {
   return workspace;
 }
 
+async function assertWorkspaceAccess(workspaceId, userId) {
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: parseInt(workspaceId, 10) },
+    include: {
+      owner: { select: { id: true, name: true, email: true } }
+    }
+  });
+
+  if (!workspace) {
+    throw new NotFoundError('Workspace not found');
+  }
+
+  // Owner always has full access
+  if (workspace.ownerId === userId) {
+    return { ...workspace, permission: null, isOwner: true };
+  }
+
+  // Check for workspace share
+  const share = await prisma.workspaceShare.findUnique({
+    where: {
+      workspaceId_userId: {
+        workspaceId: parseInt(workspaceId, 10),
+        userId
+      }
+    }
+  });
+
+  if (!share) {
+    throw new ForbiddenError('You do not have access to this workspace');
+  }
+
+  return { ...workspace, permission: share.permission, isOwner: false };
+}
+
+async function assertWorkspaceCanEdit(workspaceId, userId) {
+  const workspace = await assertWorkspaceAccess(workspaceId, userId);
+  if (!workspace.isOwner && workspace.permission !== 'EDITOR') {
+    throw new ForbiddenError('You do not have permission to edit this workspace');
+  }
+  return workspace;
+}
+
 async function assertSheetOwnership(sheetId, userId) {
   const sheet = await prisma.sheet.findUnique({
     where: { id: parseInt(sheetId, 10) },
@@ -79,6 +121,8 @@ async function assertFormOwnership(formId, userId) {
 
 module.exports = {
   assertWorkspaceOwnership,
+  assertWorkspaceAccess,
+  assertWorkspaceCanEdit,
   assertSheetOwnership,
   assertColumnOwnership,
   assertRowOwnership,

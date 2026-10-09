@@ -92,7 +92,10 @@ async function create({ sheetId, values }) {
 async function listBySheet(sheetId) {
   const rows = await prisma.row.findMany({
     where: { sheetId: parseInt(sheetId, 10) },
-    orderBy: { createdAt: 'desc' }
+    orderBy: [
+      { createdAt: 'asc' },
+      { id: 'asc' }
+    ]
   });
   return rows;
 }

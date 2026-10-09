@@ -4,6 +4,7 @@ const cors = require('cors');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
 const authRoutes = require('./modules/auth/auth.routes');
+const workspaceSharingRoutes = require('./modules/workspace-sharing/workspaces-shared.routes');
 const workspacesRoutes = require('./modules/workspaces/workspaces.routes');
 const sheetsRoutes = require('./modules/sheets/sheets.routes');
 const columnsRoutes = require('./modules/columns/columns.routes');
@@ -25,6 +26,8 @@ app.get('/health', (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/users', usersRoutes);
+// Workspace sharing routes MUST come before workspaces routes so /workspaces/shared-with-me doesn't match /:workspaceId
+app.use('/workspaces', workspaceSharingRoutes);
 app.use('/workspaces', workspacesRoutes);
 app.use('/public/forms', publicFormsRoutes);
 // Shares routes MUST come before sheets so /sheets/shared-with-me doesn't match /sheets/:id

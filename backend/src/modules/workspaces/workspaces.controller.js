@@ -1,5 +1,5 @@
 const workspacesService = require('./workspaces.service');
-const { assertWorkspaceOwnership } = require('../auth/ownership.service');
+const { assertWorkspaceOwnership, assertWorkspaceAccess } = require('../auth/ownership.service');
 
 async function create(req, res, next) {
   try {
@@ -26,7 +26,7 @@ async function list(req, res, next) {
 async function getById(req, res, next) {
   try {
     const { id } = req.params;
-    await assertWorkspaceOwnership(id, req.user.id);
+    await assertWorkspaceAccess(id, req.user.id);
     const workspace = await workspacesService.getById(id);
     res.json({ data: workspace });
   } catch (error) {

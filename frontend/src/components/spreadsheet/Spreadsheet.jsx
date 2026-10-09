@@ -19,6 +19,26 @@ function typeMeta(type) {
 
 const DEFAULT_COL_WIDTH = 180;
 
+function parseCellValue(value, type) {
+  if (type === 'NUMBER') {
+    const num = parseFloat(value);
+    if (value.trim() !== '' && isNaN(num)) {
+      return { value: null, error: 'Enter a valid number' };
+    }
+    return { value: value.trim() === '' ? '' : num, error: null };
+  }
+
+  if (type === 'BOOLEAN') {
+    const lower = value.trim().toLowerCase();
+    if (lower === 'true' || lower === 'false') {
+      return { value: lower === 'true', error: null };
+    }
+    return { value: null, error: 'Use true or false' };
+  }
+
+  return { value, error: null };
+}
+
 export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initialRows = [], user, onRename }) {
   const [columns, setColumns] = useState(initialColumns);
   const [rows, setRows] = useState(initialRows);
@@ -37,6 +57,11 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
   const inputRef = useRef(null);
   const gridRef = useRef(null);
   const doneRef = useRef(false); // prevents Enter/Escape + blur from double-committing
+  const rowUpdateQueueRef = useRef(new Map());
+  const originalEditRef = useRef(null);
+  const autoSavedCellsRef = useRef(new Set());
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
   const resizeRef = useRef({ columnId: null, startX: 0, startWidth: 0 });
 
   const colTypes = useRef(new Map(columns.map((c) => [String(c.id), c.type])));
@@ -122,18 +147,54 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
     }
   }, [sheetId]);
 
-  const updateRow = useCallback(async (rowId, values) => {
-    setIsSubmitting(true);
-    setError('');
+  const updateRow = useCallback(async (rowId, values, replace = false) => {
+    const currentRow = rowsRef.current.find((row) => row.id === rowId);
+    const originalValues = currentRow?.values || {};
+    const changedValues = new Map();
+    const keys = new Set([...Object.keys(originalValues), ...Object.keys(values)]);
+    keys.forEach((key) => {
+      const wasPresent = Object.prototype.hasOwnProperty.call(originalValues, key);
+      const isPresent = Object.prototype.hasOwnProperty.call(values, key);
+      if (wasPresent !== isPresent || !Object.is(originalValues[key], values[key])) {
+        changedValues.set(key, isPresent ? { present: true, value: values[key] } : { present: false });
+      }
+    });
+
+    const previous = rowUpdateQueueRef.current.get(rowId) || Promise.resolve();
+    const request = previous.catch(() => {}).then(async () => {
+      setIsSubmitting(true);
+      setError('');
+      try {
+        const latestValues = rowsRef.current.find((row) => row.id === rowId)?.values || {};
+        const mergedValues = replace ? { ...values } : { ...latestValues };
+        if (!replace) {
+          changedValues.forEach((change, key) => {
+            if (change.present) mergedValues[key] = change.value;
+            else delete mergedValues[key];
+          });
+        }
+        const { data } = await api.put(`/sheets/${sheetId}/rows/${rowId}`, { values: mergedValues });
+        const nextRows = rowsRef.current.map((row) => (row.id === rowId ? data.data : row));
+        rowsRef.current = nextRows;
+        setRows(nextRows);
+        return true;
+      } catch (err) {
+        const msg = err.response?.data?.error?.message || 'Failed to update row';
+        setError(msg);
+        flashError(`row-${rowId}`, msg, 5000);
+        return false;
+      } finally {
+        setIsSubmitting(false);
+      }
+    });
+    rowUpdateQueueRef.current.set(rowId, request);
+
     try {
-      const { data } = await api.put(`/sheets/${sheetId}/rows/${rowId}`, { values });
-      setRows((prev) => prev.map((r) => (r.id === rowId ? data.data : r)));
-    } catch (err) {
-      const msg = err.response?.data?.error?.message || 'Failed to update row';
-      setError(msg);
-      flashError(`row-${rowId}`, msg, 5000);
+      return await request;
     } finally {
-      setIsSubmitting(false);
+      if (rowUpdateQueueRef.current.get(rowId) === request) {
+        rowUpdateQueueRef.current.delete(rowId);
+      }
     }
   }, [sheetId]);
 
@@ -206,7 +267,14 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
   const startEdit = (rowId, columnId, seed) => {
     const row = rows.find((r) => r.id === rowId);
     const currentVal = row?.values?.[String(columnId)];
+    const key = `${rowId}-${columnId}`;
     doneRef.current = false;
+    originalEditRef.current = {
+      rowId,
+      columnId,
+      values: { ...row?.values },
+    };
+    autoSavedCellsRef.current.delete(key);
     setSelectedCell({ rowId, columnId });
     setEditingCell({ rowId, columnId });
     setEditValue(seed !== undefined ? seed : currentVal != null ? String(currentVal) : '');
@@ -220,30 +288,17 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
 
     const type = colTypes.current.get(String(columnId));
     const errKey = `${rowId}-${columnId}`;
-    let parsedValue = editValue;
-
-    if (type === 'NUMBER') {
-      const num = parseFloat(editValue);
-      if (editValue.trim() !== '' && isNaN(num)) {
-        flashError(errKey, 'Enter a valid number');
-        return;
-      }
-      parsedValue = editValue.trim() === '' ? '' : num;
-    } else if (type === 'BOOLEAN') {
-      const lower = editValue.trim().toLowerCase();
-      if (lower === 'true' || lower === 'false') {
-        parsedValue = lower === 'true';
-      } else {
-        flashError(errKey, 'Use true or false');
-        return;
-      }
+    const parsed = parseCellValue(editValue, type);
+    if (parsed.error) {
+      flashError(errKey, parsed.error);
+      return;
     }
 
     const newValues = { ...row.values };
-    if (parsedValue === '' || parsedValue === null || parsedValue === undefined) {
+    if (parsed.value === '' || parsed.value === null || parsed.value === undefined) {
       delete newValues[String(columnId)];
     } else {
-      newValues[String(columnId)] = parsedValue;
+      newValues[String(columnId)] = parsed.value;
     }
 
     doneRef.current = true;
@@ -253,7 +308,46 @@ export function Spreadsheet({ sheetId, columns: initialColumns = [], rows: initi
     await updateRow(rowId, newValues);
   };
 
+  useEffect(() => {
+    if (!editingCell) return undefined;
+
+    const { rowId, columnId } = editingCell;
+    const row = rows.find((item) => item.id === rowId);
+    const currentValue = row?.values?.[String(columnId)];
+    const parsed = parseCellValue(editValue, colTypes.current.get(String(columnId)));
+    const currentEditValue = currentValue == null ? '' : String(currentValue);
+    const unchanged = editValue === currentEditValue || (!parsed.error && (
+      parsed.value === '' ? currentValue == null : Object.is(parsed.value, currentValue)
+    ));
+    if (!row || unchanged) return undefined;
+
+    const timeout = setTimeout(() => {
+      if (parsed.error) {
+        flashError(`${rowId}-${columnId}`, parsed.error);
+        return;
+      }
+
+      const newValues = { ...row.values };
+      if (parsed.value === '' || parsed.value === null || parsed.value === undefined) {
+        delete newValues[String(columnId)];
+      } else {
+        newValues[String(columnId)] = parsed.value;
+      }
+      autoSavedCellsRef.current.add(`${rowId}-${columnId}`);
+      updateRow(rowId, newValues);
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [editingCell, editValue, rows, updateRow]);
+
   const cancelEdit = () => {
+    const original = originalEditRef.current;
+    const key = original ? `${original.rowId}-${original.columnId}` : null;
+    const wasAutoSaved = key && autoSavedCellsRef.current.has(key);
+    if (wasAutoSaved) {
+      updateRow(original.rowId, original.values, true);
+      autoSavedCellsRef.current.delete(key);
+    }
     doneRef.current = true;
     setEditingCell(null);
     setEditValue('');

@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   LoaderCircle,
   Plus,
+  Share2,
   UserRound,
   X,
 } from 'lucide-react';
@@ -44,6 +45,10 @@ export function Workspaces() {
   const [sheetName, setSheetName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState(() => new Set());
+  const [sharedWorkspaces, setSharedWorkspaces] = useState([]);
+  const [sharedSheets, setSharedSheets] = useState([]);
+  const [sharedSheetsLoading, setSharedSheetsLoading] = useState(true);
+  const [sharedSheetsError, setSharedSheetsError] = useState('');
   const detailRequests = useRef(new Map());
 
   const loadWorkspaceDetails = useCallback((id) => {
@@ -76,11 +81,24 @@ export function Workspaces() {
     setListLoading(true);
     setListError('');
 
-    api
-      .get('/workspaces')
-      .then(({ data }) => {
+    Promise.all([
+      api.get('/workspaces').then(({ data }) => {
         if (active) setWorkspaces(data.data);
-      })
+      }),
+      api.get('/workspaces/shared-with-me').then(({ data }) => {
+        if (active) setSharedWorkspaces(Array.isArray(data) ? data : []);
+      }),
+      api.get('/sheets/shared-with-me')
+        .then(({ data }) => {
+          if (active) setSharedSheets(data.data || []);
+        })
+        .catch((error) => {
+          if (active) setSharedSheetsError(errorMessage(error, 'Unable to load sheets shared with you.'));
+        })
+        .finally(() => {
+          if (active) setSharedSheetsLoading(false);
+        }),
+    ])
       .catch((error) => {
         if (active) setListError(errorMessage(error, 'Unable to load your workspaces.'));
       })
@@ -360,6 +378,160 @@ export function Workspaces() {
                   </li>
                 );
               })}
+            </ul>
+          )}
+        </div>
+
+        <div className="px-3 py-4">
+          <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
+            Shared workspaces
+          </p>
+
+          {listLoading ? (
+            <div className="flex items-center gap-2 px-2 py-3 text-sm text-zinc-500">
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+              Loading shared workspaces
+            </div>
+          ) : sharedWorkspaces.length === 0 ? (
+            <p className="px-2 py-3 text-sm leading-5 text-zinc-500">No workspaces shared with you.</p>
+          ) : (
+            <ul className="space-y-1">
+              {sharedWorkspaces.map((workspace) => {
+                const key = String(workspace.id);
+                const isSelected = key === String(workspaceId);
+                const isExpanded = expandedWorkspaceIds.has(key) || isSelected;
+                const details = workspaceDetails[key];
+                const isLoading = loadingWorkspaceIds.has(key) && !details;
+
+                return (
+                  <li key={key}>
+                    <div className={`flex items-center rounded-lg pr-1 transition ${isSelected ? 'bg-red-50 text-red-800' : 'text-zinc-700 hover:bg-zinc-100'}`}>
+                      <button
+                        type="button"
+                        onClick={() => toggleWorkspace(workspace.id)}
+                        className="flex h-9 w-7 shrink-0 items-center justify-center rounded-md text-zinc-400 hover:text-zinc-800"
+                      >
+                        {isLoading ? (
+                          <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                        ) : isExpanded ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => selectWorkspace(workspace.id)}
+                        aria-current={isSelected ? 'page' : undefined}
+                        className="flex h-9 min-w-0 flex-1 items-center gap-2 text-left text-[13px] font-medium"
+                      >
+                        <Share2 className={`h-4 w-4 shrink-0 ${isSelected ? 'text-red-600' : 'text-zinc-400'}`} />
+                        <span className="truncate">{workspace.name}</span>
+                      </button>
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                        workspace.permission === 'EDITOR' ? 'bg-emerald-50 text-emerald-700' :
+                        workspace.permission === 'COMMENTER' ? 'bg-blue-50 text-blue-700' :
+                        'bg-zinc-100 text-zinc-600'
+                      }`}>
+                        {workspace.permission}
+                      </span>
+                    </div>
+
+                    {isExpanded && (
+                      <ul className="ml-[17px] mt-1 space-y-0.5 border-l border-zinc-200 pl-3">
+                        {isLoading ? (
+                          <li className="flex items-center gap-2 py-2 pl-1 text-xs text-zinc-500">
+                            <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                            Loading sheets
+                          </li>
+                        ) : detailErrors[key] ? (
+                          <li className="py-2 pl-1 text-xs text-red-600">
+                            <p>{detailErrors[key]}</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDetailErrors((current) => {
+                                  const next = { ...current };
+                                  delete next[key];
+                                  return next;
+                                });
+                                loadWorkspaceDetails(key).catch((error) => {
+                                  setDetailErrors((current) => ({
+                                    ...current,
+                                    [key]: errorMessage(error, 'Unable to load sheets for this workspace.'),
+                                  }));
+                                });
+                              }}
+                              className="mt-1 font-semibold underline underline-offset-2"
+                            >
+                              Try again
+                            </button>
+                          </li>
+                        ) : details?.sheets?.length ? (
+                          details.sheets.map((sheet) => (
+                            <li key={sheet.id}>
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/workspaces/${workspace.id}/sheets/${sheet.id}`)}
+                                className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-xs text-zinc-600 transition hover:bg-zinc-200/60 hover:text-zinc-900"
+                              >
+                                <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                                <span className="truncate text-left">{sheet.name}</span>
+                              </button>
+                            </li>
+                          ))
+                        ) : (
+                          <li className="py-2 pl-1 text-xs text-zinc-400">No sheets</li>
+                        )}
+                      </ul>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="px-3 py-4">
+          <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
+            Shared sheets
+          </p>
+
+          {sharedSheetsLoading ? (
+            <div className="flex items-center gap-2 px-2 py-3 text-sm text-zinc-500">
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+              Loading shared sheets
+            </div>
+          ) : sharedSheetsError ? (
+            <p role="alert" className="px-2 py-3 text-sm leading-5 text-red-600">{sharedSheetsError}</p>
+          ) : sharedSheets.length === 0 ? (
+            <p className="px-2 py-3 text-sm leading-5 text-zinc-500">No sheets shared with you.</p>
+          ) : (
+            <ul className="space-y-1">
+              {sharedSheets.map((sheet) => (
+                <li key={sheet.id}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/workspaces/${sheet.workspaceId}/sheets/${sheet.id}`)}
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition hover:bg-zinc-100"
+                  >
+                    <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-zinc-800">{sheet.name}</span>
+                      <span className="block truncate text-xs text-zinc-500">
+                        {sheet.workspaceName} · Shared by {sheet.ownerName}
+                      </span>
+                    </span>
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                      sheet.permission === 'EDITOR' ? 'bg-emerald-50 text-emerald-700' :
+                      sheet.permission === 'COMMENTER' ? 'bg-blue-50 text-blue-700' :
+                      'bg-zinc-100 text-zinc-600'
+                    }`}>
+                      {sheet.permission}
+                    </span>
+                  </button>
+                </li>
+              ))}
             </ul>
           )}
         </div>

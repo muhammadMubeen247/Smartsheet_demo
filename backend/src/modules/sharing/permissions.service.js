@@ -17,7 +17,7 @@ async function getEffectivePermission(sheetId, userId) {
     return { level: 'OWNER', sheet };
   }
 
-  const share = await prisma.sheetShare.findUnique({
+  const sheetShare = await prisma.sheetShare.findUnique({
     where: {
       sheetId_userId: {
         sheetId: parseInt(sheetId, 10),
@@ -26,8 +26,21 @@ async function getEffectivePermission(sheetId, userId) {
     }
   });
 
-  if (share) {
-    return { level: share.permission, sheet };
+  if (sheetShare) {
+    return { level: sheetShare.permission, sheet };
+  }
+
+  const workspaceShare = await prisma.workspaceShare.findUnique({
+    where: {
+      workspaceId_userId: {
+        workspaceId: sheet.workspaceId,
+        userId
+      }
+    }
+  });
+
+  if (workspaceShare) {
+    return { level: workspaceShare.permission, sheet };
   }
 
   return { level: null, sheet };

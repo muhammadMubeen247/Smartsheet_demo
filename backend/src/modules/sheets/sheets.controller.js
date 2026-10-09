@@ -1,5 +1,5 @@
 const sheetsService = require('./sheets.service');
-const { assertWorkspaceOwnership } = require('../auth/ownership.service');
+const { assertWorkspaceCanEdit, assertWorkspaceAccess } = require('../auth/ownership.service');
 const { assertCanView, assertCanEdit, assertIsOwner } = require('../sharing/permissions.service');
 
 async function create(req, res, next) {
@@ -7,7 +7,7 @@ async function create(req, res, next) {
     const { workspaceId } = req.params;
     const { name } = req.body;
     
-    await assertWorkspaceOwnership(workspaceId, req.user.id);
+    await assertWorkspaceCanEdit(workspaceId, req.user.id);
     const sheet = await sheetsService.create({ name, workspaceId });
     
     res.status(201).json({ data: sheet });
@@ -19,7 +19,7 @@ async function create(req, res, next) {
 async function listByWorkspace(req, res, next) {
   try {
     const { workspaceId } = req.params;
-    await assertWorkspaceOwnership(workspaceId, req.user.id);
+    await assertWorkspaceAccess(workspaceId, req.user.id);
     const sheets = await sheetsService.listByWorkspace(workspaceId);
     res.json({ data: sheets, count: sheets.length });
   } catch (error) {

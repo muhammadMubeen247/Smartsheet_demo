@@ -21,6 +21,7 @@ export function ShareModal({ sheetName, sheetId, onClose }) {
   const [suggestions, setSuggestions] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchError, setSearchError] = useState('');
 
   // Refs for canceling stale requests
   const requestIdRef = useRef(0);
@@ -33,35 +34,21 @@ export function ShareModal({ sheetName, sheetId, onClose }) {
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      requestIdRef.current += 1;
+      searchAbortRef.current?.abort();
     };
   }, []);
 
-  const performSearch = useCallback(async (query) => {
-    if (query.length < MIN_QUERY_LENGTH) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      setIsSearching(false);
-      return;
-    }
-
-    // Increment request ID to track staleness
-    requestIdRef.current += 1;
-    const currentRequestId = requestIdRef.current;
-
+  const performSearch = useCallback(async (query, currentRequestId) => {
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
     setIsSearching(true);
-
-    // Cancel previous in-flight request if possible
-    if (searchAbortRef.current) {
-      searchAbortRef.current.cancel();
-    }
-
-    const source = api.CancelToken ? api.CancelToken.source() : null;
-    searchAbortRef.current = source;
+    setSearchError('');
 
     try {
       const { data } = await api.get('/users/search', {
         params: { q: query },
-        cancelToken: source?.token,
+        signal: controller.signal,
       });
 
       // Only update if this is still the latest request
@@ -70,17 +57,18 @@ export function ShareModal({ sheetName, sheetId, onClose }) {
         setShowSuggestions(true);
       }
     } catch (err) {
-      // Ignore cancellation errors
-      if (err.code === 'ERR_CANCELED' || err.message === 'canceled') return;
+      if (controller.signal.aborted) return;
 
       // Only update if this is still the latest request
       if (currentRequestId === requestIdRef.current) {
         setSuggestions([]);
-        setShowSuggestions(false);
+        setShowSuggestions(true);
+        setSearchError(err.response?.data?.error?.message || 'Unable to search for users. Please try again.');
       }
     } finally {
       if (currentRequestId === requestIdRef.current) {
         setIsSearching(false);
+        searchAbortRef.current = null;
       }
     }
   }, []);
@@ -91,27 +79,41 @@ export function ShareModal({ sheetName, sheetId, onClose }) {
     setError('');
     setSuggestions([]);
     setShowSuggestions(false);
+    setSearchError('');
+    setIsSearching(false);
+    requestIdRef.current += 1;
+    const currentRequestId = requestIdRef.current;
 
     // Clear existing debounce timer
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
     }
+    searchAbortRef.current?.abort();
+    searchAbortRef.current = null;
 
-    // Only search if it looks like the start of an email
     const trimmed = value.trim();
-    if (trimmed.length >= MIN_QUERY_LENGTH && trimmed.includes('@')) {
+    if (trimmed.length >= MIN_QUERY_LENGTH) {
       debounceTimerRef.current = setTimeout(() => {
-        performSearch(trimmed);
+        debounceTimerRef.current = null;
+        performSearch(trimmed, currentRequestId);
       }, DEBOUNCE_MS);
-    } else if (trimmed.length < MIN_QUERY_LENGTH) {
-      setIsSearching(false);
     }
   };
 
   const handleSelectSuggestion = (user) => {
+    requestIdRef.current += 1;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    searchAbortRef.current?.abort();
+    searchAbortRef.current = null;
     setEmail(user.email);
     setSuggestions([]);
     setShowSuggestions(false);
+    setSearchError('');
+    setIsSearching(false);
   };
 
   const handleSubmit = async (e) => {
@@ -185,7 +187,11 @@ export function ShareModal({ sheetName, sheetId, onClose }) {
               {/* Suggestions dropdown */}
               {showSuggestions && (
                 <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-lg">
-                  {suggestions.length === 0 ? (
+                  {searchError ? (
+                    <div role="alert" className="px-3 py-2.5 text-sm text-red-600">
+                      {searchError}
+                    </div>
+                  ) : suggestions.length === 0 ? (
                     <div className="flex items-center gap-2 px-3 py-2.5 text-sm text-zinc-500">
                       <UserPlus className="h-4 w-4" />
                       <span>No users found</span>

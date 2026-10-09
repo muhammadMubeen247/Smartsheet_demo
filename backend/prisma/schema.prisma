@@ -13,6 +13,8 @@ model User {
   email        String      @unique
   password     String
   workspaces   Workspace[]
+  shares       SheetShare[]
+  comments     Comment[]
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -39,6 +41,8 @@ model Sheet {
   columns     Column[]
   rows        Row[]
   forms       Form[]
+  shares      SheetShare[]
+  comments    Comment[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -72,6 +76,7 @@ model Row {
   sheetId   Int
   sheet     Sheet    @relation(fields: [sheetId], references: [id], onDelete: Cascade)
   values    Json
+  comments  Comment[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -91,4 +96,46 @@ model Form {
   updatedAt   DateTime @updatedAt
 
   @@map("forms")
+}
+
+enum SheetPermission {
+  EDITOR
+  COMMENTER
+  VIEWER
+}
+
+model SheetShare {
+  id         Int               @id @default(autoincrement())
+  sheetId    Int
+  sheet      Sheet             @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  userId     Int
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission SheetPermission
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@unique([sheetId, userId])
+  @@index([userId])
+  @@map("sheet_shares")
+}
+
+model Comment {
+  id              Int       @id @default(autoincrement())
+  content         String
+  authorId        Int
+  author          User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  sheetId         Int
+  sheet           Sheet     @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  rowId           Int?
+  row             Row?      @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  parentCommentId Int?
+  parentComment   Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies         Comment[] @relation("CommentReplies")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([sheetId])
+  @@index([rowId])
+  @@index([parentCommentId])
+  @@map("comments")
 }

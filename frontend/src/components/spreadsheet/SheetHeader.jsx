@@ -1,12 +1,16 @@
 import { useState } from 'react';
-import { FileText, Share2, LoaderCircle } from 'lucide-react';
+import { FileText, Share2, ChevronDown, LoaderCircle } from 'lucide-react';
 import api from '../../lib/api';
+import { ShareDropdown } from './ShareDropdown';
+import { ShareModal } from './ShareModal';
 
 export function SheetHeader({ sheet, workspaceId, onRename }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(sheet.name);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [showShareDropdown, setShowShareDropdown] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const handleRename = async () => {
     const name = editName.trim();
@@ -68,14 +72,30 @@ export function SheetHeader({ sheet, workspaceId, onRename }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 self-start">
+      <div className="relative flex items-center gap-2 self-start">
         <button
           className="inline-flex h-9 items-center gap-2 rounded-lg bg-red-600 px-3.5 text-sm font-semibold text-white transition hover:bg-red-700"
-          onClick={() => { /* Share functionality — future */ }}
+          onClick={() => setShowShareDropdown((v) => !v)}
         >
           <Share2 className="h-4 w-4" />
           Share
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showShareDropdown ? 'rotate-180' : ''}`} />
         </button>
+
+        {showShareDropdown && (
+          <ShareDropdown
+            onShareSheet={() => setShowShareModal(true)}
+            onClose={() => setShowShareDropdown(false)}
+          />
+        )}
+
+        {showShareModal && (
+          <ShareModal
+            sheetName={sheet.name}
+            sheetId={sheet.id}
+            onClose={() => setShowShareModal(false)}
+          />
+        )}
       </div>
     </div>
   );

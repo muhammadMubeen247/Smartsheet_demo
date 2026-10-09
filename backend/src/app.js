@@ -10,6 +10,9 @@ const columnsRoutes = require('./modules/columns/columns.routes');
 const rowsRoutes = require('./modules/rows/rows.routes');
 const formsRoutes = require('./modules/forms/forms.routes');
 const publicFormsRoutes = require('./modules/forms/publicForms.routes');
+const sharesRoutes = require('./modules/sharing/shares.routes');
+const commentsRoutes = require('./modules/comments/comments.routes');
+const usersRoutes = require('./modules/users/users.routes');
 
 const app = express();
 
@@ -21,11 +24,15 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/auth', authRoutes);
+app.use('/users', usersRoutes);
 app.use('/workspaces', workspacesRoutes);
 app.use('/public/forms', publicFormsRoutes);
+// Shares routes MUST come before sheets so /sheets/shared-with-me doesn't match /sheets/:id
+app.use('/sheets', sharesRoutes);
 app.use('/', sheetsRoutes);
 app.use('/sheets', columnsRoutes);
 app.use('/sheets', rowsRoutes);
+app.use('/', commentsRoutes);
 app.use('/', formsRoutes);
 
 app.use(notFoundHandler);

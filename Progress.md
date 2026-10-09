@@ -508,3 +508,130 @@
 - `README.md` — full API documentation with endpoints, auth instructions, project structure, testing guide
 - `Progress.md` — this file, development progress log organized by sprints
 
+---
+
+## Sprint 6: Sheet Sharing and Commenting
+
+### Phase 1: Database Schema Updates
+- Added `SheetPermission` enum: OWNER, EDITOR, COMMENTER, VIEWER
+- Created `SheetShare` model:
+  - id, sheetId (FK), userId (FK), permission (SheetPermission enum)
+  - Unique constraint on `[sheetId, userId]`
+  - Cascade deletes on both foreign keys
+  - createdAt and updatedAt timestamps
+- Created `Comment` model:
+  - id, sheetId (FK), rowId (FK, nullable), authorId (FK to User)
+  - parentCommentId (FK, nullable) for threaded replies
+  - content (text)
+  - Cascade deletes on sheetId and authorId
+  - createdAt and updatedAt timestamps
+- Migration `20261009041035_add_sheet_sharing_and_comments` applied successfully
+
+### Phase 2: Permissions Service
+- Created `src/modules/sharing/permissions.service.js`:
+  - `getEffectivePermission(sheetId, userId)` — resolves user's effective permission level
+  - `assertCanView(sheetId, userId)` — throws 403 if user lacks VIEWER+ access
+  - `assertCanComment(sheetId, userId)` — throws 403 if user lacks COMMENTER+ access
+  - `assertCanEdit(sheetId, userId)` — throws 403 if user lacks EDITOR+ access
+  - `assertIsOwner(sheetId, userId)` — throws 403 if user is not OWNER
+- Permission resolution logic:
+  - Sheet creator is OWNER
+  - Shared users get their assigned permission level
+  - Unshared users have no access (throws 403)
+
+### Phase 3: Sharing API
+- Created `src/modules/sharing/shares.service.js`:
+  - `share(sheetId, email, permission, ownerId)` — shares sheet with user
+  - `listShares(sheetId)` — lists all shares for a sheet
+  - `updateShare(sheetId, shareId, permission)` — updates permission level
+  - `removeShare(sheetId, shareId)` — revokes access
+  - `getSharedWithMe(userId)` — lists sheets shared with user
+- Created `src/modules/sharing/shares.controller.js` — request handlers
+- Created `src/modules/sharing/shares.routes.js`:
+  - POST `/sheets/:sheetId/shares` — share sheet (owner only)
+  - GET `/sheets/:sheetId/shares` — list shares (owner only)
+  - PATCH `/sheets/:sheetId/shares/:shareId` — update permission (owner only)
+  - DELETE `/sheets/:sheetId/shares/:shareId` — revoke access (owner only)
+  - GET `/sheets/shared-with-me` — list sheets shared with current user
+- Validation rules:
+  - Cannot share with unregistered email (404)
+  - Cannot share with sheet owner (400)
+  - Cannot share with existing shared user (409)
+  - Invalid permission levels rejected (400)
+
+### Phase 4: Comments API
+- Created `src/modules/comments/comments.service.js`:
+  - `listBySheet(sheetId)` — lists sheet-level comments with threaded replies
+  - `listByRow(sheetId, rowId)` — lists row-level comments with threaded replies
+  - `create({ sheetId, rowId, content, authorId })` — creates comment
+  - `createReply(parentCommentId, content, authorId)` — creates reply
+  - `update(commentId, content, userId, isOwner)` — updates comment (author or owner only)
+  - `remove(commentId, userId, isOwner)` — deletes comment (author or owner only)
+- Created `src/modules/comments/comments.controller.js` — request handlers
+- Created `src/modules/comments/comments.routes.js`:
+  - GET `/sheets/:sheetId/comments` — list sheet comments
+  - GET `/sheets/:sheetId/rows/:rowId/comments` — list row comments
+  - POST `/sheets/:sheetId/comments` — create sheet comment
+  - POST `/sheets/:sheetId/rows/:rowId/comments` — create row comment
+  - POST `/comments/:commentId/replies` — create reply
+  - PATCH `/sheets/:sheetId/comments/:commentId` — update comment
+  - DELETE `/sheets/:sheetId/comments/:commentId` — delete comment
+- Threading rules:
+  - Top-level comments can have replies
+  - Replies cannot have replies (nested replies prevented with 400 error)
+
+### Phase 5: Route Wiring and Integration
+- Wired new routes in `src/app.js`:
+  - Mounted `sharesRoutes` before `sheetsRoutes` to prevent `/sheets/shared-with-me` from being caught by `/sheets/:id` parameter
+  - Mounted `commentsRoutes` at root level
+- Updated `ownership.service.js`:
+  - Modified `assertColumnOwnership` and `assertRowOwnership` to only verify resource lineage
+  - Removed user access checks (now handled by permissions service)
+- Updated controllers to use permission checks:
+  - `sheets.controller.js` — replaced `assertSheetOwnership` with `assertCanEdit`/`assertCanView`
+  - `columns.controller.js` — replaced `assertSheetOwnership` with `assertCanEdit`/`assertCanView`
+  - `rows.controller.js` — replaced `assertSheetOwnership` with `assertCanEdit`/`assertCanView`
+
+### Phase 6: End-to-End Testing
+- Created `test-sharing-comments.ps1` — comprehensive PowerShell test script:
+  - 20 sharing tests covering:
+    - Share sheet with different permission levels
+    - Duplicate share rejection
+    - Permission-based access control
+    - Permission updates and revocation
+    - Shared-with-me listing
+    - Non-owner share management rejection
+  - 14 commenting tests covering:
+    - Sheet-level and row-level comments
+    - Threaded replies
+    - Nested reply prevention
+    - Comment editing and deletion permissions
+    - Permission-based comment access
+  - 5 regression tests verifying existing endpoints still work
+- Fixed test script issues:
+  - Replaced Unicode characters (✓/✗) with ASCII ([PASS]/[FAIL]) to avoid PowerShell encoding errors
+  - Fixed Prisma include statements (`user` → `author`) to match schema
+  - Corrected comment operation URLs in test script
+- **Result: ALL 39 TESTS PASSED**
+
+### Sprint 6 Summary
+
+| Module | Status |
+|--------|--------|
+| Schema updates (SheetPermission, SheetShare, Comment) | ✅ Done |
+| Permissions service | ✅ Done |
+| Sharing API (share, list, update, revoke) | ✅ Done |
+| Comments API (sheet/row comments, replies) | ✅ Done |
+| Route wiring and integration | ✅ Done |
+| Controller updates with permission checks | ✅ Done |
+| E2E testing (39 tests) | ✅ Done — all tests passing |
+| Documentation updates | ✅ Done |
+
+### Key Decisions
+- Created separate `permissions.service.js` for sheet-level access checks rather than merging into existing `ownership.service.js`
+- Mounted `sharesRoutes` before `sheetsRoutes` to prevent route parameter conflicts
+- Modified `assertColumnOwnership` and `assertRowOwnership` to only verify lineage, not user access (user access now handled by permissions service)
+- Comment edit/delete permissions enforced in service layer (author or sheet owner can modify)
+- Threading limited to one level: top-level comments can have replies, but replies cannot have replies
+- Shared-with-me endpoint mounted at `/sheets/shared-with-me` (not `/workspaces/:workspaceId/sheets/shared-with-me`) for easier access
+

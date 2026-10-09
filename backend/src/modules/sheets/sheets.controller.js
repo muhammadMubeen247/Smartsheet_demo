@@ -1,5 +1,6 @@
 const sheetsService = require('./sheets.service');
-const { assertWorkspaceOwnership, assertSheetOwnership } = require('../auth/ownership.service');
+const { assertWorkspaceOwnership } = require('../auth/ownership.service');
+const { assertCanView, assertCanEdit, assertIsOwner } = require('../sharing/permissions.service');
 
 async function create(req, res, next) {
   try {
@@ -29,7 +30,7 @@ async function listByWorkspace(req, res, next) {
 async function getById(req, res, next) {
   try {
     const { id } = req.params;
-    await assertSheetOwnership(id, req.user.id);
+    await assertCanView(id, req.user.id);
     const sheet = await sheetsService.getById(id);
     res.json({ data: sheet });
   } catch (error) {
@@ -41,7 +42,7 @@ async function update(req, res, next) {
   try {
     const { id } = req.params;
     const { name } = req.body;
-    await assertSheetOwnership(id, req.user.id);
+    await assertCanEdit(id, req.user.id);
     const sheet = await sheetsService.update(id, { name });
     res.json({ data: sheet });
   } catch (error) {
@@ -52,7 +53,7 @@ async function update(req, res, next) {
 async function remove(req, res, next) {
   try {
     const { id } = req.params;
-    await assertSheetOwnership(id, req.user.id);
+    await assertIsOwner(id, req.user.id);
     await sheetsService.remove(id);
     res.status(204).send();
   } catch (error) {

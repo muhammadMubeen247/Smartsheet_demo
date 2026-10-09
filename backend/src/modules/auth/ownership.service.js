@@ -44,10 +44,6 @@ async function assertColumnOwnership(columnId, userId) {
     throw new NotFoundError('Column not found');
   }
 
-  if (column.sheet.workspace.ownerId !== userId) {
-    throw new ForbiddenError('You do not have access to this column');
-  }
-
   return column;
 }
 
@@ -59,10 +55,6 @@ async function assertRowOwnership(rowId, userId) {
 
   if (!row) {
     throw new NotFoundError('Row not found');
-  }
-
-  if (row.sheet.workspace.ownerId !== userId) {
-    throw new ForbiddenError('You do not have access to this row');
   }
 
   return row;
